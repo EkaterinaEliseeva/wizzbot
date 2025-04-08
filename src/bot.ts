@@ -120,7 +120,11 @@ export function initBot(token: string): TelegramBot {
     subscriptions.forEach((sub, index) => {
       message += `${index + 1}. ${sub.origin} ➡️ ${sub.destination}\n`;
       message += `   📅 ${sub.dateType === 'single' ? 'Дата: ' + sub.date : 'Период: ' + sub.startDate + ' - ' + sub.endDate}\n`;
-      message += `   💰 Макс. цена: ${sub.maxPrice} руб.\n`;
+      
+      if (sub.lastPrice) {
+        message += `   💰 Текущая цена: ${sub.lastPrice} руб.\n`;
+      }
+      
       message += `   🗑 /remove_${sub.id}\n\n`;
     });
     
@@ -201,25 +205,17 @@ function processUserDialog(bot: TelegramBot, state: UserState, text: string): vo
       break;
       
     case 'waiting_date':
-      // Сохраняем конкретную дату
+      // Сохраняем конкретную дату и завершаем создание подписки
       subscription.dateType = 'single';
       subscription.date = text.trim();
-      state.stage = 'confirm';
+      subscription.maxPrice = 1000000; // Устанавливаем высокое значение по умолчанию
       
-      // Запрашиваем максимальную цену
-      bot.sendMessage(
-        chatId,
-        `🏙 Город отправления: ${subscription.origin}\n🏝 Город прибытия: ${subscription.destination}\n📅 Дата: ${subscription.date}\n\nУкажите максимальную цену в рублях:`,
-        {
-          reply_markup: {
-            force_reply: true
-          }
-        }
-      );
+      // Создаем и сохраняем подписку
+      createSubscription(bot, state);
       break;
       
     case 'waiting_date_range':
-      // Сохраняем диапазон дат (формат: dd.mm.yyyy - dd.mm.yyyy)
+      // Сохраняем диапазон дат и завершаем создание подписки
       try {
         const [startDate, endDate] = text.split('-').map(d => d.trim());
         if (!startDate || !endDate) throw new Error('Неверный формат');
@@ -227,18 +223,10 @@ function processUserDialog(bot: TelegramBot, state: UserState, text: string): vo
         subscription.dateType = 'range';
         subscription.startDate = startDate;
         subscription.endDate = endDate;
-        state.stage = 'confirm';
+        subscription.maxPrice = 1000000; // Устанавливаем высокое значение по умолчанию
         
-        // Запрашиваем максимальную цену
-        bot.sendMessage(
-          chatId,
-          `🏙 Город отправления: ${subscription.origin}\n🏝 Город прибытия: ${subscription.destination}\n📅 Период: ${subscription.startDate} - ${subscription.endDate}\n\nУкажите максимальную цену в рублях:`,
-          {
-            reply_markup: {
-              force_reply: true
-            }
-          }
-        );
+        // Создаем и сохраняем подписку
+        createSubscription(bot, state);
       } catch (e) {
         bot.sendMessage(
           chatId,
@@ -246,46 +234,42 @@ function processUserDialog(bot: TelegramBot, state: UserState, text: string): vo
         );
       }
       break;
+  }
+}
+
+/**
+ * Завершает создание подписки и уведомляет пользователя
+ * @param bot Экземпляр бота
+ * @param state Состояние пользователя
+ */
+function createSubscription(bot: TelegramBot, state: UserState): void {
+  const { chatId, subscription } = state;
+  
+  // Создаем и сохраняем подписку
+  addSubscription(subscription as Subscription)
+    .then(() => {
+      let message = '✅ Подписка успешно создана!\n\n';
+      message += `🏙 Откуда: ${subscription.origin}\n`;
+      message += `🏝 Куда: ${subscription.destination}\n`;
       
-    case 'confirm':
-      // Сохраняем максимальную цену и завершаем подписку
-      const maxPrice = parseInt(text.trim(), 10);
-      
-      if (isNaN(maxPrice)) {
-        bot.sendMessage(chatId, '❌ Пожалуйста, введите корректное числовое значение для цены.');
-        return;
+      if (subscription.dateType === 'single') {
+        message += `📅 Дата: ${subscription.date}\n`;
+      } else {
+        message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n`;
       }
       
-      subscription.maxPrice = maxPrice;
+      message += '\nВы получите уведомление, когда найдутся билеты по низкой цене.';
       
-      // Создаем и сохраняем подписку
-      addSubscription(subscription as Subscription)
-        .then(() => {
-          let message = '✅ Подписка успешно создана!\n\n';
-          message += `🏙 Откуда: ${subscription.origin}\n`;
-          message += `🏝 Куда: ${subscription.destination}\n`;
-          
-          if (subscription.dateType === 'single') {
-            message += `📅 Дата: ${subscription.date}\n`;
-          } else {
-            message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n`;
-          }
-          
-          message += `💰 Максимальная цена: ${subscription.maxPrice} руб.\n\n`;
-          message += 'Вы получите уведомление, когда найдутся билеты по подходящей цене.';
-          
-          bot.sendMessage(chatId, message);
-          
-          // Сбрасываем состояние пользователя
-          userStates.delete(chatId);
-        })
-        .catch(error => {
-          console.error('Ошибка при создании подписки:', error);
-          bot.sendMessage(chatId, '❌ Произошла ошибка при создании подписки. Попробуйте еще раз.');
-          userStates.delete(chatId);
-        });
-      break;
-  }
+      bot.sendMessage(chatId, message);
+      
+      // Сбрасываем состояние пользователя
+      userStates.delete(chatId);
+    })
+    .catch(error => {
+      console.error('Ошибка при создании подписки:', error);
+      bot.sendMessage(chatId, '❌ Произошла ошибка при создании подписки. Попробуйте еще раз.');
+      userStates.delete(chatId);
+    });
 }
 
 /**
@@ -349,8 +333,9 @@ export function sendPriceAlert(
   oldPrice: number
 ): void {
   const priceDiff = oldPrice - newPrice;
+  const percentDiff = Math.round(priceDiff / oldPrice * 100);
   
-  let message = `✅ Снижение цены на подписку!\n\n`;
+  let message = `✅ Снижение цены на билеты!\n\n`;
   message += `${subscription.origin} ➡️ ${subscription.destination}\n`;
   
   if (subscription.dateType === 'single') {
@@ -361,10 +346,12 @@ export function sendPriceAlert(
   
   message += `\n💰 Старая цена: ${oldPrice} руб.\n`;
   message += `💰 Новая цена: ${newPrice} руб.\n`;
-  message += `💹 Снижение: ${priceDiff} руб. (-${Math.round(priceDiff / oldPrice * 100)}%)\n\n`;
   
-  if (newPrice <= subscription.maxPrice) {
-    message += `🔥 Цена ниже вашего порога (${subscription.maxPrice} руб.)!`;
+  if (percentDiff >= 20) {
+    message += `💹 Значительное снижение: ${priceDiff} руб. (-${percentDiff}%)! 🔥\n`;
+    message += `\nРекомендуем рассмотреть покупку билетов!`;
+  } else {
+    message += `💹 Снижение: ${priceDiff} руб. (-${percentDiff}%)\n`;
   }
   
   sendMessage(bot, subscription.chatId, message);
