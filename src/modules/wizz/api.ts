@@ -24,12 +24,7 @@ export async function getWizzairSearchHeaders(
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-gpu'
+          '--disable-dev-shm-usage'
         ],
     });
     
@@ -226,10 +221,12 @@ export async function checkWizzairPrice(
       } else {
         session.headers['Referer'] = refererUrl;
       }
+
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
       // Отправляем запрос с полученными cookies и headers
       const response = await axios.post<IWizzairSearchResponse>(
-        'https://be.wizzair.com/27.6.0/Api/search/search',
+        'https://be.wizzair.com/27.6.0/Api/asset/farechart',
         requestData,
         {
           headers: {
