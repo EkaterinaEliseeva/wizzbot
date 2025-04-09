@@ -260,8 +260,10 @@ export async function getSubscriptionStatuses(subscriptions: ISubscription[]) {
     message =  '🔍 У вас пока нет активных подписок. Используйте /subscribe, чтобы создать подписку.';
   } else {
     message = '📋 Ваши подписки на авиабилеты:\n\n';
-  
-    subscriptions.forEach(async (sub, index) => {
+
+    for (let index = 0; index < subscriptions.length; index++) {
+      let sub = subscriptions[index];
+
       message += `${index + 1}. ${sub.origin} ➡️ ${sub.destination}\n`;
       
       if (sub.dateType === 'single') {
@@ -284,7 +286,7 @@ export async function getSubscriptionStatuses(subscriptions: ISubscription[]) {
       }
       
       message += `   🗑 /remove_${sub.id}\n\n`;
-    });
+    }
   }
 
   return message;
