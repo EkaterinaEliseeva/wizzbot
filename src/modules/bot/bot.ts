@@ -1,16 +1,13 @@
+// src/telegramBot.ts
 import TelegramBot from 'node-telegram-bot-api';
-import { checkFlightPrices } from './priceChecker';
-import { Subscription, addSubscription, getSubscriptions, removeSubscription } from './subscription';
+import { checkFlightPrices } from '../price-checker';
+import { addSubscription, getSubscriptions, removeSubscription } from '../subscription';
+import { IUserState } from './types';
+import { ISubscription } from '../subscription/types';
 
-// Состояния диалога для пользователей
-interface UserState {
-  chatId: number;
-  stage: 'idle' | 'waiting_origin' | 'waiting_destination' | 'waiting_date' | 'waiting_date_range' | 'confirm';
-  subscription: Partial<Subscription>;
-}
 
 // Хранилище состояний пользователей
-const userStates: Map<number, UserState> = new Map();
+const userStates: Map<number, IUserState> = new Map();
 
 /**
  * Инициализирует Telegram бота
@@ -119,7 +116,15 @@ export function initBot(token: string): TelegramBot {
     
     subscriptions.forEach((sub, index) => {
       message += `${index + 1}. ${sub.origin} ➡️ ${sub.destination}\n`;
-      message += `   📅 ${sub.dateType === 'single' ? 'Дата: ' + sub.date : 'Период: ' + sub.startDate + ' - ' + sub.endDate}\n`;
+      
+      if (sub.dateType === 'single') {
+        message += `   📅 Дата: ${sub.date}\n`;
+      } else {
+        message += `   📅 Период: ${sub.startDate} - ${sub.endDate}\n`;
+        if (sub.bestDate) {
+          message += `   🔥 Лучшая дата: ${sub.bestDate}\n`;
+        }
+      }
       
       if (sub.lastPrice) {
         message += `   💰 Текущая цена: ${sub.lastPrice} руб.\n`;
@@ -163,7 +168,7 @@ export function initBot(token: string): TelegramBot {
  * @param state Текущее состояние пользователя
  * @param text Текст сообщения
  */
-function processUserDialog(bot: TelegramBot, state: UserState, text: string): void {
+function processUserDialog(bot: TelegramBot, state: IUserState, text: string): void {
   const { chatId, stage, subscription } = state;
   
   switch (stage) {
@@ -242,11 +247,11 @@ function processUserDialog(bot: TelegramBot, state: UserState, text: string): vo
  * @param bot Экземпляр бота
  * @param state Состояние пользователя
  */
-function createSubscription(bot: TelegramBot, state: UserState): void {
+function createSubscription(bot: TelegramBot, state: IUserState): void {
   const { chatId, subscription } = state;
   
   // Создаем и сохраняем подписку
-  addSubscription(subscription as Subscription)
+  addSubscription(subscription as ISubscription)
     .then(() => {
       let message = '✅ Подписка успешно создана!\n\n';
       message += `🏙 Откуда: ${subscription.origin}\n`;
@@ -328,7 +333,7 @@ export function sendMessage(bot: TelegramBot, chatId: string | number, message: 
  */
 export function sendPriceAlert(
   bot: TelegramBot, 
-  subscription: Subscription, 
+  subscription: ISubscription, 
   newPrice: number, 
   oldPrice: number
 ): void {
