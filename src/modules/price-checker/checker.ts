@@ -3,8 +3,6 @@ import cheerio from 'cheerio';
 import { 
   convertDateFormat, 
   getAirportCode, 
-  checkWizzairPriceWithPuppeteer, 
-  checkWizzairPriceRangeWithPuppeteer,
 } from '../wizz';
 
 // Выбор метода API для Wizzair
