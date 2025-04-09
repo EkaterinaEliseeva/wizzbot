@@ -228,6 +228,8 @@ export async function checkWizzairPrice(
       }
 */
       await new Promise(resolve => setTimeout(resolve, 5000));
+
+      console.log(JSON.stringify({requestData}))
       
       // Отправляем запрос с полученными cookies и headers
       const response = await axios.post<IWizzairSearchResponse>(
