@@ -74,7 +74,7 @@ export async function getWizzairSearchHeaders(
     
     console.log(`Открываем страницу поиска билетов: ${searchUrl}`);
     await page.goto(searchUrl, { 
-      waitUntil: 'networkidle2', 
+      waitUntil: 'domcontentloaded', 
       timeout: 90000 
     });
     
@@ -197,7 +197,7 @@ export async function checkWizzairPrice(
   ): Promise<IWizzairSearchResponse | null> {
     try {
       // Получаем сессионные данные с фокусом на API поиска
-      const session = await getWizzairSearchHeaders(origin, destination);
+      const session = {}//await getWizzairSearchHeaders(origin, destination);
       
       const requestData: IWizzairSearchParams = {
         isRescueFare: false,
@@ -217,7 +217,7 @@ export async function checkWizzairPrice(
       
       // Создаем Referer URL
       const refererUrl = `https://www.wizzair.com/ru-ru/booking/select-flight/${origin}/${destination}/${date}/null/1/0/0/null`;
-      
+      /*
       // Обновляем Referer в заголовках
       if (session.headers['Referer']) {
         session.headers['Referer'] = refererUrl;
@@ -226,19 +226,19 @@ export async function checkWizzairPrice(
       } else {
         session.headers['Referer'] = refererUrl;
       }
-
+*/
       await new Promise(resolve => setTimeout(resolve, 5000));
       
       // Отправляем запрос с полученными cookies и headers
       const response = await axios.post<IWizzairSearchResponse>(
         'https://be.wizzair.com/27.6.0/Api/asset/farechart',
         requestData,
-        {
+        /*{
           headers: {
             ...session.headers,
             'Cookie': session.cookies
           },
-        }
+        }*/
       );
   
       // Проверяем, есть ли в ответе информация о рейсах
