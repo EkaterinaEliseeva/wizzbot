@@ -4,6 +4,7 @@ import { CronJob } from 'cron';
 import { initBot, setupCallbackQueryHandlers, sendPriceAlert } from './modules/bot';
 import { checkFlightPrice, checkFlightPriceRange } from './modules/price-checker';
 import { getAllSubscriptions, updateSubscriptionPrice, updateSubscriptionDetails } from './modules/subscription';
+import { testWizzairRoute, testDateRangeRoute } from './routes';
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -212,11 +213,16 @@ app.get('/check-prices', async (_req: Request, res: Response) => {
   }
 });
 
-
 // Запуск сервера
 app.get('/', (_req: Request, res: Response) => {
   res.send('Flight Price Tracker работает!');
 });
+
+// Тестирование Wizzair API для конкретной даты
+app.get('/test-wizzair', testWizzairRoute);
+
+// Тестирование проверки диапазона дат
+app.get('/test-date-range', testDateRangeRoute);
 
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);

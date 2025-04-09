@@ -1,8 +1,6 @@
 import axios from 'axios';
 import cheerio from 'cheerio';
 import { 
-  checkWizzairPrice, 
-  checkWizzairPriceRange, 
   convertDateFormat, 
   getAirportCode, 
   checkWizzairPriceWithPuppeteer, 
@@ -12,7 +10,7 @@ import {
 // Выбор метода API для Wizzair
 // 'api' - прямой API запрос
 // 'puppeteer' - запрос через Puppeteer
-const WIZZAIR_API_METHOD = process.env.WIZZAIR_API_METHOD || 'exact';
+const WIZZAIR_API_METHOD = process.env.WIZZAIR_API_METHOD || 'puppeteer';
 
 
 /**
@@ -51,23 +49,17 @@ export async function checkFlightPrice(
       date = convertDateFormat(date);
     }
 
-    // Проверяем цену с использованием выбранного метода
-    let priceInfo = null;
-
-    switch (WIZZAIR_API_METHOD) {
-      case 'api':
-        priceInfo = await checkWizzairPrice(originCode, destinationCode, date);
-        break;
-      case 'puppeteer':
-        priceInfo = await checkWizzairPriceWithPuppeteer(originCode, destinationCode, date);
-        break;
-    }
+    console.log(`Используем Puppeteer для ${origin}-${destination} на дату ${date}`);
+    
+    let priceInfo = await checkWizzairPriceWithPuppeteer(originCode, destinationCode, date);
     
     if (priceInfo) {
+      console.log(`Получена цена: ${priceInfo.price} ${priceInfo.currency}`);
       // Возвращаем цену, округленную до целого числа
       return Math.round(priceInfo.price);
     }
     
+    console.log(`Не удалось получить цену для ${origin}-${destination} на дату ${date}`);
     return null;
   } catch (error) {
     console.error('Ошибка при получении данных:', 
@@ -106,35 +98,23 @@ export async function checkFlightPriceRange(
     const startDateFormatted = convertDateFormat(startDate);
     const endDateFormatted = convertDateFormat(endDate);
 
-    // Проверяем цены используя выбранный метод
-    let priceInfo = null;
-
-    switch (WIZZAIR_API_METHOD) {
-      case 'api':
-        priceInfo = await checkWizzairPriceRange(
-          originCode, 
-          destinationCode, 
-          startDateFormatted, 
-          endDateFormatted
-        );
-        break;
-      case 'puppeteer':
-        priceInfo = await checkWizzairPriceRangeWithPuppeteer(
-          originCode, 
-          destinationCode, 
-          startDateFormatted, 
-          endDateFormatted
-        );
-        break;
-    }
+    console.log(`Используем Puppeteer для диапазона дат ${startDate}-${endDate}`);
+    let priceInfo = await checkWizzairPriceRangeWithPuppeteer(
+      originCode, 
+      destinationCode, 
+      startDateFormatted, 
+      endDateFormatted
+    );
     
     if (priceInfo) {
+      console.log(`Получена лучшая цена: ${priceInfo.price} ${priceInfo.currency} на дату ${priceInfo.date}`);
       return {
         price: Math.round(priceInfo.price),
         date: priceInfo.date
       };
     }
     
+    console.log(`Не удалось получить цены для диапазона дат ${startDate}-${endDate}`);
     return null;
   } catch (error) {
     console.error('Ошибка при получении данных для диапазона дат:', 
