@@ -56,6 +56,8 @@ export async function checkFlightPrice(
       });
       
       const price = Number(currentDateFlight?.price.amount);
+      
+      return price;
     }
     
     console.log(`Не удалось получить цену для ${origin}-${destination} на дату ${date}`);
