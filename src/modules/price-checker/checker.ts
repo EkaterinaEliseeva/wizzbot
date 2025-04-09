@@ -261,7 +261,7 @@ export async function getSubscriptionStatuses(subscriptions: ISubscription[]) {
   } else {
     message = '📋 Ваши подписки на авиабилеты:\n\n';
   
-    subscriptions.forEach((sub, index) => {
+    subscriptions.forEach(async (sub, index) => {
       message += `${index + 1}. ${sub.origin} ➡️ ${sub.destination}\n`;
       
       if (sub.dateType === 'single') {
@@ -272,9 +272,15 @@ export async function getSubscriptionStatuses(subscriptions: ISubscription[]) {
           message += `   🔥 Лучшая дата: ${sub.bestDate}\n`;
         }
       }
+
+      let lastPrice = sub.lastPrice || null
       
-      if (sub.lastPrice) {
-        message += `   💰 Текущая цена: ${sub.lastPrice} руб.\n`;
+      if (!lastPrice) {
+        lastPrice = await checkFlightPrice(sub.origin, sub.destination, sub.date)
+      }
+
+      if (lastPrice) {
+        message += `   💰 Текущая цена: ${lastPrice} руб.\n`;
       }
       
       message += `   🗑 /remove_${sub.id}\n\n`;
