@@ -1,6 +1,5 @@
-// src/telegramBot.ts
 import TelegramBot from 'node-telegram-bot-api';
-import { checkFlightPrices } from '../price-checker';
+import { getSubscriptionStatuses } from '../price-checker';
 import { addSubscription, getSubscriptions, removeSubscription } from '../subscription';
 import { IUserState } from './types';
 import { ISubscription } from '../subscription/types';
@@ -31,34 +30,10 @@ export function initBot(token: string): TelegramBot {
 Ваш ID чата: ${chatId}
 
 Доступные команды:
-/status - Проверить текущую цену
 /subscribe - Создать подписку на билеты
 /subscriptions - Посмотреть свои подписки
 /help - Показать справку`
     );
-  });
-
-  // Обработчик команды /status
-  bot.onText(/\/status/, async (msg) => {
-    const chatId = msg.chat.id;
-    try {
-      const currentPrice = await checkFlightPrices();
-      if (currentPrice !== null) {
-        bot.sendMessage(
-          chatId,
-          `📊 Текущая цена: ${currentPrice} руб.
-Желаемая цена: ${process.env.DESIRED_PRICE || 'не задана'} руб.`
-        );
-      } else {
-        bot.sendMessage(
-          chatId,
-          '❌ Не удалось получить текущую цену. Проверьте настройки селектора и URL.'
-        );
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
-      bot.sendMessage(chatId, `❌ Ошибка при получении текущей цены: ${errorMessage}`);
-    }
   });
 
   // Обработчик команды /help
@@ -68,7 +43,6 @@ export function initBot(token: string): TelegramBot {
       chatId,
       `🛠 Доступные команды:
 
-/status - Проверить текущую цену на авиабилеты
 /subscribe - Создать новую подписку на билеты
 /subscriptions - Посмотреть список ваших подписок
 /help - Показать это сообщение
@@ -106,32 +80,7 @@ export function initBot(token: string): TelegramBot {
   bot.onText(/\/subscriptions/, async (msg) => {
     const chatId = msg.chat.id;
     const subscriptions = await getSubscriptions(chatId);
-    
-    if (subscriptions.length === 0) {
-      bot.sendMessage(chatId, '🔍 У вас пока нет активных подписок. Используйте /subscribe, чтобы создать подписку.');
-      return;
-    }
-    
-    let message = '📋 Ваши подписки на авиабилеты:\n\n';
-    
-    subscriptions.forEach((sub, index) => {
-      message += `${index + 1}. ${sub.origin} ➡️ ${sub.destination}\n`;
-      
-      if (sub.dateType === 'single') {
-        message += `   📅 Дата: ${sub.date}\n`;
-      } else {
-        message += `   📅 Период: ${sub.startDate} - ${sub.endDate}\n`;
-        if (sub.bestDate) {
-          message += `   🔥 Лучшая дата: ${sub.bestDate}\n`;
-        }
-      }
-      
-      if (sub.lastPrice) {
-        message += `   💰 Текущая цена: ${sub.lastPrice} руб.\n`;
-      }
-      
-      message += `   🗑 /remove_${sub.id}\n\n`;
-    });
+    const message = await getSubscriptionStatuses(subscriptions)
     
     bot.sendMessage(chatId, message);
   });

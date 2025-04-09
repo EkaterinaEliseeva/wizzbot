@@ -1,7 +1,6 @@
-// src/modules/wizz/enhanced-headers-api.ts
 import puppeteer from 'puppeteer';
 import axios from 'axios';
-import { IWizzairSearchParams } from './types/IWizzairSearchParams';
+import { IWizzairSearchParams, IWizzairSearchResponse } from './types';
 
 /**
  * Получает сессию и данные для аутентификации из Wizzair с отслеживанием конкретных запросов
@@ -182,23 +181,16 @@ export async function getWizzairSearchHeaders(
   }
 }
 
-/**
- * Проверяет цену на авиабилеты через Wizzair API с точными заголовками поиска
- * @param origin Код аэропорта отправления (IATA)
- * @param destination Код аэропорта назначения (IATA)
- * @param date Дата вылета в формате YYYY-MM-DD
- * @returns Минимальная цена на билеты или null в случае ошибки
- */
 export async function checkWizzairPrice(
-  origin: string,
-  destination: string,
-  date: string
-): Promise<{ price: number; currency: string } | null> {
-  try {
-    // Получаем сессионные данные с фокусом на API поиска
-    const session = await getWizzairSearchHeaders(origin, destination);
-    
-    const requestData: IWizzairSearchParams ={
+    origin: string,
+    destination: string,
+    date: string
+  ): Promise<IWizzairSearchResponse | null> {
+    try {
+      // Получаем сессионные данные с фокусом на API поиска
+      const session = await getWizzairSearchHeaders(origin, destination);
+      
+      const requestData: IWizzairSearchParams = {
         isRescueFare: false,
         adultCount: 1,
         childCount: 0,
@@ -211,80 +203,53 @@ export async function checkWizzairPrice(
           date: date
         }]
       };
-
-    console.log(`Отправляем запрос к Wizzair API для ${origin}-${destination} на дату ${date} с точными заголовками поиска`);
-    
-    // Создаем Referer URL
-    const refererUrl = `https://www.wizzair.com/ru-ru/booking/select-flight/${origin}/${destination}/${date}/null/1/0/0/null`;
-    
-    // Обновляем Referer в заголовках
-    if (session.headers['Referer']) {
-      session.headers['Referer'] = refererUrl;
-    } else if (session.headers['referer']) {
-      session.headers['referer'] = refererUrl;
-    } else {
-      session.headers['Referer'] = refererUrl;
-    }
-    
-    // Отправляем запрос с полученными cookies и headers
-    const response = await axios.post<unknown>(
-      'https://be.wizzair.com/27.6.0/Api/asset/farechart',
-      requestData,
-      {
-        headers: {
-          ...session.headers,
-          'Cookie': session.cookies
-        },
-      }
-    );
-
-    console.log(response.data)
-
-    // // Проверяем, есть ли в ответе информация о рейсах
-    // if (!response.data.outboundFlights || response.data.outboundFlights.length === 0) {
-    //   console.log(`Рейсы по направлению ${origin}-${destination} на дату ${date} не найдены`);
-    //   return null;
-    // }
-
-    // // Находим минимальную цену
-    // let minPrice = Number.MAX_SAFE_INTEGER;
-    // let currency = '';
-
-    // response.data.outboundFlights.forEach(flight => {
-    //   flight.fares.forEach(fare => {
-    //     // Используем discountedPrice, если доступна, иначе basePrice
-    //     const price = fare.discountedPrice?.amount || fare.basePrice?.amount;
-    //     const curr = fare.discountedPrice?.currencyCode || fare.basePrice?.currencyCode;
-        
-    //     if (price && price < minPrice) {
-    //       minPrice = price;
-    //       currency = curr;
-    //     }
-    //   });
-    // });
-
-    // if (minPrice === Number.MAX_SAFE_INTEGER) {
-    //   console.log(`Не удалось найти цены для рейсов ${origin}-${destination} на дату ${date}`);
-    //   return null;
-    // }
-
-    return {
-      price:  0,
-      currency: 'currency'
-    };
-  } catch (error) {
-    console.error('Ошибка при получении данных из Wizzair API с точными заголовками:', 
-      error instanceof Error ? error.message : String(error)
-    );
-    if (axios.isAxiosError(error) && error.response) {
-      console.error('Статус ответа:', error.response.status);
-      console.error('Данные ответа:', error.response.data);
+  
+      console.log(`Отправляем запрос к Wizzair API для ${origin}-${destination} на дату ${date} с точными заголовками поиска`);
       
-      // Если получаем ошибку 429 (too many requests), возвращаем специальную ошибку
-      if (error.response.status === 429) {
-        console.error('Получено ограничение запросов (429). Необходимо добавить задержку между запросами.');
+      // Создаем Referer URL
+      const refererUrl = `https://www.wizzair.com/ru-ru/booking/select-flight/${origin}/${destination}/${date}/null/1/0/0/null`;
+      
+      // Обновляем Referer в заголовках
+      if (session.headers['Referer']) {
+        session.headers['Referer'] = refererUrl;
+      } else if (session.headers['referer']) {
+        session.headers['referer'] = refererUrl;
+      } else {
+        session.headers['Referer'] = refererUrl;
       }
+      
+      // Отправляем запрос с полученными cookies и headers
+      const response = await axios.post<IWizzairSearchResponse>(
+        'https://be.wizzair.com/27.6.0/Api/search/search',
+        requestData,
+        {
+          headers: {
+            ...session.headers,
+            'Cookie': session.cookies
+          },
+        }
+      );
+  
+      // Проверяем, есть ли в ответе информация о рейсах
+      if (!response.data.outboundFlights || response.data.outboundFlights.length === 0) {
+        console.log(`Рейсы по направлению ${origin}-${destination} на дату ${date} не найдены`);
+        return null;
+      }
+  
+        return response.data
+    } catch (error) {
+      console.error('Ошибка при получении данных из Wizzair API с точными заголовками:', 
+        error instanceof Error ? error.message : String(error)
+      );
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('Статус ответа:', error.response.status);
+        console.error('Данные ответа:', error.response.data);
+        
+        // Если получаем ошибку 429 (too many requests), возвращаем специальную ошибку
+        if (error.response.status === 429) {
+          console.error('Получено ограничение запросов (429). Необходимо добавить задержку между запросами.');
+        }
+      }
+      return null;
     }
-    return null;
   }
-}

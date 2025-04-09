@@ -4,15 +4,10 @@ import {  checkWizzairPrice } from './modules/wizz';
 /**
  * Маршрут для тестирования заполнения формы поиска билетов
  */
-export const testFormFillRoute = async (req: Request, res: Response) => {
+export const testRoute = async (req: Request, res: Response) => {
   try {
     // Получаем параметры из запроса
-    const result = await checkWizzairPrice(
- 'EVN',
- 'ROM',
-'2025-06-18'
-    );
-  
+    const result = await checkWizzairPrice('EVN', 'ROM', '2025-06-18');
     
     console.log(result)
   } catch (error) {
