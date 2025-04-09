@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { fillSearchForm } from './modules/wizz';
+import {  checkWizzairPrice } from './modules/wizz';
 
 /**
  * Маршрут для тестирования заполнения формы поиска билетов
@@ -7,25 +7,14 @@ import { fillSearchForm } from './modules/wizz';
 export const testFormFillRoute = async (req: Request, res: Response) => {
   try {
     // Получаем параметры из запроса
-    const origin = req.query.origin as string || 'Ереван';
-    const destination = req.query.destination as string || 'Рим';
-    const date = req.query.date as string || '18.06.2025';
+    const result = await checkWizzairPrice(
+ 'EVN',
+ 'ROM',
+'2025-06-18'
+    );
+  
     
-    console.log(`Запрос на заполнение формы: ${origin} -> ${destination}, дата: ${date}`);
-    
-    // Вызываем функцию заполнения формы
-    const result = await fillSearchForm(origin, destination, date);
-    
-    // Отправляем результат
-    res.json({
-      success: result.success,
-      message: result.message,
-      parameters: {
-        origin,
-        destination,
-        date
-      }
-    });
+    console.log(result)
   } catch (error) {
     // Отправляем информацию об ошибке
     res.status(500).json({

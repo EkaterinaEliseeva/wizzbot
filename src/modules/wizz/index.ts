@@ -1,2 +1,2 @@
-export * from './puppeteer';
+export * from './api';
 export * from './utils'

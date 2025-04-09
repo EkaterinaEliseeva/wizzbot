@@ -1,63 +1,118 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
+import { handleCookiesAndPopups } from './handle-cookies';
 
-/**
- * Закрывает всплывающее окно с куками, если оно появилось
- * @param page Страница браузера
- * @returns true, если окно было закрыто, false - если окно не найдено
- */
-async function handleCookiePopup(page: Page): Promise<boolean> {
-  try {
-    // Проверяем, появилось ли окно с куками
-    const cookiePopupSelector = '#onetrust-banner-sdk';
-    const hasCookiePopup = await page.$(cookiePopupSelector) !== null;
+// Функция для получения случайного User-Agent
+function getRandomUserAgent(): string {
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:89.0) Gecko/20100101 Firefox/89.0'
+  ];
+  return userAgents[Math.floor(Math.random() * userAgents.length)];
+}
 
-    if (!hasCookiePopup) {
-        await page.waitForSelector(cookiePopupSelector, { visible: true, timeout: 60000 });
-    }
+// Расширенная стратегия обхода защиты
+async function bypassCaptchaAndTracking(page: Page): Promise<void> {
+    // Отключение WebDriver
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+      });
+    });
+  
+    // Удаление признаков автоматизации
+    await page.evaluateOnNewDocument(() => {
+      // @ts-ignore
+      window.chrome = {
+        runtime: {}
+      };
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['ru-RU', 'ru', 'en-US', 'en']
+      });
+    });
+  
+    // Настройка дополнительных параметров для имитации реального браузера
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1'
+    });
+  }
 
 
-    const removeCookiePopup = async () => {
-        console.log('Обнаружено всплывающее окно с куками, закрываем...');
-        
-        // Находим кнопку "Принять все"
-        const acceptButtonSelector = '#onetrust-accept-btn-handler';
-        const acceptButton = await page.$(acceptButtonSelector);
-        
-        if (acceptButton) {
-            // Нажимаем кнопку "Принять все"
-            await acceptButton.click();
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            console.log('Окно с куками успешно закрыто');
-            return true;
-        } else {
-            console.log('Не удалось найти кнопку принятия куков');
-        }
-    }
+// Симуляция человеческого ввода
+async function simulateHumanInput(page: Page, selector: string, text: string): Promise<void> {
+  await page.waitForSelector(selector, { visible: true });
+  await page.focus(selector);
+  await page.click(selector, { clickCount: 3 });
+  await page.keyboard.press('Backspace');
+  
+  // Имитация печати с задержками и возможными опечатками
+  for (let char of text) {
+    await page.keyboard.type(char, { 
+      delay: 50 + Math.random() * 100 
+    });
     
-    if (hasCookiePopup) {
-      console.log('Обнаружено всплывающее окно с куками, закрываем...');
-      
-      await removeCookiePopup()
-    } else {
-        await page.waitForSelector(cookiePopupSelector, { visible: true, timeout: 60000 });
-        await removeCookiePopup()
+    // Случайные опечатки
+    if (Math.random() < 0.05) {
+      await page.keyboard.type(String.fromCharCode(char.charCodeAt(0) + 1));
+      await page.keyboard.press('Backspace');
     }
-    
-    return false;
-  } catch (error) {
-    console.error('Ошибка при обработке всплывающего окна с куками:', error);
-    return false;
+  }
+
+  // Выбор первого варианта из списка с повторными попытками
+  const locationSelectors = [
+    '[data-test="locations-container"]',
+    '.location-suggestion',
+    '.autocomplete-dropdown'
+  ];
+
+  for (const locSelector of locationSelectors) {
+    try {
+      await page.waitForSelector(locSelector, { visible: true, timeout: 5000 });
+      await page.click(locSelector);
+      break;
+    } catch {
+      console.warn(`Не удалось найти селектор ${locSelector}`);
+    }
   }
 }
 
-/**
- * Открывает сайт aviasales и заполняет форму поиска
- * @param origin Пункт отправления
- * @param destination Пункт назначения
- * @param date Дата вылета (DD.MM.YYYY)
- * @returns Объект с результатом операции
- */
+// Выбор даты с навигацией по месяцам
+async function selectDateWithNavigation(page: Page, formattedDate: string): Promise<void> {
+  const maxAttempts = 12;
+  let attempt = 0;
+  let dateFound = false;
+
+  while (!dateFound && attempt < maxAttempts) {
+    const dateSelector = `.id-${formattedDate} [role="button"]`;
+    const dateElement = await page.$(dateSelector);
+
+    if (dateElement) {
+      await dateElement.click();
+      dateFound = true;
+    } else {
+      // Переход к следующему месяцу
+      const nextMonthButton = await page.$('[data-test="calendar-page-forward"]');
+      if (nextMonthButton) {
+        await nextMonthButton.click();
+        await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
+      }
+      attempt++;
+    }
+  }
+
+  if (!dateFound) {
+    throw new Error(`Не удалось найти дату ${formattedDate} в календаре`);
+  }
+}
+
+// Открытие сайта и заполнение формы
 export async function fillSearchForm(
   origin: string,
   destination: string,
@@ -66,133 +121,151 @@ export async function fillSearchForm(
   let browser: Browser | null = null;
 
   try {
-    console.log(`Заполнение формы поиска: ${origin} -> ${destination}, дата: ${date}`);
-    
-    // Запускаем браузер
-    browser = await puppeteer.launch({
-      headless: false, // Для отладки используем видимый режим
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1366,768'],
-      defaultViewport: { width: 1366, height: 768 }
+    // Параметры запуска браузера с расширенной маскировкой
+    const launchOptions = {
+      headless: false,
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox', 
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--window-size=1366,768',
+        // Дополнительные опции для стабильности
+        '--disable-gpu',
+        '--no-first-run',
+        '--disable-extensions',
+        '--mute-audio',
+        '--disable-background-networking',
+        '--disable-default-apps',
+        '--disable-sync'
+      ],
+      defaultViewport: { width: 1366, height: 768 },
+      ignoreHTTPSErrors: true,
+      protocolTimeout: 90000 // Увеличиваем время ожидания
+    };
+
+    browser = await puppeteer.launch(launchOptions);
+    const page = await browser.newPage();
+
+    // Случайный User-Agent
+    const userAgent = getRandomUserAgent();
+    await page.setUserAgent(userAgent);
+
+    // Расширенный обход защиты
+    await bypassCaptchaAndTracking(page);
+
+    // Установка обработчиков ошибок
+    page.on('pageerror', (err) => {
+      console.error('Ошибка страницы:', err);
     });
 
-    // Открываем новую страницу
-    const page = await browser.newPage();
-    
-    // Устанавливаем User-Agent как у обычного браузера
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36');
-    
-    // Открываем сайт
-    console.log('Открываем страницу поиска...');
-    await page.goto(`https://www.wizzair.com/ru-ru`, { waitUntil: 'networkidle2', timeout: 60000 });
-    
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    // Проверяем, нужно ли закрыть всплывающее окно с куками
-    await handleCookiePopup(page);
-    
-    // Проверяем, что форма поиска загрузилась
-    const formSelector = 'form[data-test="flights"]';
-    await page.waitForSelector(formSelector, { visible: true, timeout: 30000 });
+    page.on('requestfailed', (request) => {
+      console.warn(`Не удалось загрузить ресурс: ${request.url()}. Ошибка: ${request.failure()?.errorText}`);
+    });
 
-    console.log('Выбираем режим "В одну сторону"...');
-    await page.click('input[data-test="oneway"]');
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    console.log(`Заполняем поле "Пункт вылета": ${origin}`);
-    await page.click('input[data-test="search-departure-station"]', { clickCount: 3 });
-    await page.keyboard.press('Backspace');
-    await page.type('input[data-test="search-departure-station"]', origin, { delay: 100 });
-    
-   // Ждем появления выпадающего списка с подсказками
-   const suggestionSelector = '[data-test="locations-container"]';
-   await page.waitForSelector(suggestionSelector, { visible: true, timeout: 10000 });
-   
-   // Выбираем первый вариант из списка
-   await page.click(suggestionSelector);
-   await new Promise(resolve => setTimeout(resolve, 1000));
-   
-   // Заполняем поле "Пункт назначения"
-   console.log(`Заполняем поле "Пункт назначения": ${destination}`);
-   await page.click('input[data-test="search-arrival-station"]', { clickCount: 3 });
-   await page.keyboard.press('Backspace');
-   await page.type('input[data-test="search-arrival-station"]', destination, { delay: 100 });
-
-    // Ждем появления выпадающего списка с подсказками
-    await page.waitForSelector(suggestionSelector, { visible: true, timeout: 10000 });
-
-    // Выбираем первый вариант из списка
-    await page.click(suggestionSelector);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-   
-   
-    // Открываем календарь
-    console.log('Открываем календарь...');
-    await page.click('[data-test="date-inputs"] input');
-    
-    // Ждем появления календаря
-    await page.waitForSelector('.vc-container', { visible: true, timeout: 20000 });
-    
-    // Преобразуем дату из формата DD.MM.YYYY в формат YYYY-MM-DD для поиска в календаре
-    const [day, month, year] = date.split('.');
-    const formattedDate = `${year}-${month}-${day}`;
-    
-    // Проверяем, есть ли эта дата в текущем видимом месяце
-    console.log(`Выбираем дату: ${date} (${formattedDate})`);
-    let dateSelector = `.id-${formattedDate} [role="button"]`;
-    let dateElement = await page.$(dateSelector);
-
-    // Если даты нет в текущем месяце, пробуем переключать месяцы
-    const maxAttempts = 12; // Максимальное количество месяцев для просмотра
-    let attempt = 0;
-    
-    while (!dateElement && attempt < maxAttempts) {
-      // Нажимаем кнопку "Следующий месяц"
-      console.log('Переключаемся на следующий месяц...');
-      const nextMonthButton = await page.$('[data-test="calendar-page-forward"]');
-      if (nextMonthButton) {
-        await nextMonthButton.click();
-        await new Promise(resolve => setTimeout(resolve, 400));
-        dateElement = await page.$(dateSelector);
-        attempt++;
-      } else {
-        break;
+    // Навигация с расширенными опциями и обработкой ошибок
+    try {
+      await page.goto('https://www.wizzair.com/ru-ru', { 
+        waitUntil: 'networkidle2', 
+        timeout: 90000,
+        referer: 'https://www.google.com'
+      });
+    } catch (navigationError) {
+      console.error('Ошибка навигации:', navigationError);
+      
+      // Попытка альтернативной навигации
+      try {
+        await page.goto('https://www.wizzair.com/ru-ru', { 
+          waitUntil: 'domcontentloaded', 
+          timeout: 90000
+        });
+      } catch (fallbackError) {
+        throw new Error(`Не удалось загрузить страницу: ${fallbackError}`);
       }
     }
+
+    // Обработка кук и всплывающих окон
+    await handleCookiesAndPopups(page);
+
+    // Перехват и логирование запросов
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      request.continue();
+    });
+
+    page.on('response', async (response) => {
+      if (response.status() === 429) {
+        console.warn(`Получен 429 статус для ${response.url()}`);
+      }
+    });
+
+    // Проверка загрузки страницы
+    await page.waitForSelector('input[data-test="oneway"]', { 
+      visible: true, 
+      timeout: 30000 
+    });
+
+    // Выбор режима "В одну сторону"
+    await page.evaluate(() => {
+      const oneWayRadio = document.querySelector('input[data-test="oneway"]') as HTMLInputElement;
+      if (oneWayRadio) oneWayRadio.click();
+    });
+
+    // Случайные паузы между действиями
+    const randomDelay = (min = 500, max = 2000) => 
+      new Promise(resolve => setTimeout(resolve, Math.random() * (max - min) + min));
     
-    if (!dateElement) {
-      throw new Error(`Не удалось найти дату ${date} в календаре`);
-    }
-    
-    // Выбираем дату
-    await dateElement.click();
-    await new Promise(resolve => setTimeout(resolve, 2500));
-    
-    // Нажимаем кнопку "Поиск"
-    console.log('Нажимаем кнопку "Поиск"...');
+    await randomDelay();
+
+    // Заполнение полей с имитацией человеческого ввода
+    await simulateHumanInput(page, 'input[data-test="search-departure-station"]', origin);
+    await randomDelay();
+    await simulateHumanInput(page, 'input[data-test="search-arrival-station"]', destination);
+    await randomDelay();
+
+    // Открытие и выбор даты
+    await page.click('[data-test="date-inputs"] input');
+    await randomDelay();
+
+    // Выбор даты с перелистыванием месяцев
+    const [day, month, year] = date.split('.');
+    const formattedDate = `${year}-${month}-${day}`;
+    await selectDateWithNavigation(page, formattedDate);
+
+    // Финальный поиск
+    await randomDelay();
     await page.click('button[data-test="flight-search-submit"]');
+  
+    // Ожидание результатов с большим таймаутом и обработкой ошибок
+    try {
+      await page.waitForNavigation({ 
+        waitUntil: 'networkidle2', 
+        timeout: 90000 
+      });
+    } catch (navError) {
+      console.warn('Ошибка при ожидании навигации:', navError);
     
-    // Ждем начала загрузки результатов
-    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
-    
-    console.log('Форма успешно заполнена и отправлена');
+      // Попытка альтернативного ожидания
+      await page.waitForSelector('.search-results', { 
+        visible: true, 
+        timeout: 60000 
+      });
+    }
 
-
-    
-    
-    // Оставляем браузер открытым для проверки результатов
-    // Для реального использования нужно раскомментировать закрытие браузера
-    // await browser.close();
-    
     return {
       success: true,
       message: 'Форма успешно заполнена и отправлена'
     };
-    
+
   } catch (error) {
-    console.error('Ошибка при заполнении формы:', error);
+    console.error('Критическая ошибка при заполнении формы:', error);
     
-    // Закрываем браузер в случае ошибки
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error('Ошибка при закрытии браузера:', closeError);
+      }
     }
     
     return {
