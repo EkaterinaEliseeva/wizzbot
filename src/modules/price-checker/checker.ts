@@ -1,11 +1,19 @@
-// src/priceChecker.ts
 import axios from 'axios';
 import cheerio from 'cheerio';
-import { checkWizzairPrice, checkWizzairPriceRange, convertDateFormat, getAirportCode, 
-  checkWizzairPriceWithPuppeteer, checkWizzairPriceRangeWithPuppeteer } from '../wizz';
+import { 
+  checkWizzairPrice, 
+  checkWizzairPriceRange, 
+  convertDateFormat, 
+  getAirportCode, 
+  checkWizzairPriceWithPuppeteer, 
+  checkWizzairPriceRangeWithPuppeteer,
+} from '../wizz';
 
-// Флаг, указывающий на использование Puppeteer вместо прямых API-запросов
-const USE_PUPPETEER = true;
+// Выбор метода API для Wizzair
+// 'api' - прямой API запрос
+// 'puppeteer' - запрос через Puppeteer
+const WIZZAIR_API_METHOD = process.env.WIZZAIR_API_METHOD || 'exact';
+
 
 /**
  * Проверяет текущую цену на авиабилеты для заданной подписки 
@@ -19,7 +27,7 @@ export async function checkFlightPrice(
   destination: string,
   date?: string
 ): Promise<number | null> {
-  try {
+  try {    
     // Получаем IATA коды аэропортов
     const originCode = getAirportCode(origin);
     const destinationCode = getAirportCode(destination);
@@ -43,12 +51,16 @@ export async function checkFlightPrice(
       date = convertDateFormat(date);
     }
 
-    // Проверяем цену с использованием предпочтительного метода
-    let priceInfo;
-    if (USE_PUPPETEER) {
-      priceInfo = await checkWizzairPriceWithPuppeteer(originCode, destinationCode, date);
-    } else {
-      priceInfo = await checkWizzairPrice(originCode, destinationCode, date);
+    // Проверяем цену с использованием выбранного метода
+    let priceInfo = null;
+
+    switch (WIZZAIR_API_METHOD) {
+      case 'api':
+        priceInfo = await checkWizzairPrice(originCode, destinationCode, date);
+        break;
+      case 'puppeteer':
+        priceInfo = await checkWizzairPriceWithPuppeteer(originCode, destinationCode, date);
+        break;
     }
     
     if (priceInfo) {
@@ -94,22 +106,26 @@ export async function checkFlightPriceRange(
     const startDateFormatted = convertDateFormat(startDate);
     const endDateFormatted = convertDateFormat(endDate);
 
-    // Проверяем цены используя предпочтительный метод
-    let priceInfo;
-    if (USE_PUPPETEER) {
-      priceInfo = await checkWizzairPriceRangeWithPuppeteer(
-        originCode, 
-        destinationCode, 
-        startDateFormatted, 
-        endDateFormatted
-      );
-    } else {
-      priceInfo = await checkWizzairPriceRange(
-        originCode, 
-        destinationCode, 
-        startDateFormatted, 
-        endDateFormatted
-      );
+    // Проверяем цены используя выбранный метод
+    let priceInfo = null;
+
+    switch (WIZZAIR_API_METHOD) {
+      case 'api':
+        priceInfo = await checkWizzairPriceRange(
+          originCode, 
+          destinationCode, 
+          startDateFormatted, 
+          endDateFormatted
+        );
+        break;
+      case 'puppeteer':
+        priceInfo = await checkWizzairPriceRangeWithPuppeteer(
+          originCode, 
+          destinationCode, 
+          startDateFormatted, 
+          endDateFormatted
+        );
+        break;
     }
     
     if (priceInfo) {
