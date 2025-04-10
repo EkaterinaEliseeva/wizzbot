@@ -1,7 +1,9 @@
 ;import { 
   getFlightsFromTimetable,
-  getAllAirportCodes
 } from '../wizz';
+import { 
+  getAllAirportCodes
+} from '../wizz/utils/getAllAirportCodes';
 import { ISubscription, updateSubscriptionPrice, 
   updateBestDates, 
   areBestDatesChanged,  } from '../subscription';
