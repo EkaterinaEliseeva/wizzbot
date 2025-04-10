@@ -1,5 +1,5 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { getSubscriptionStatuses } from '../price-checker';
+import { checkSubscriptionPrice, formatPriceCheckMessage, getSubscriptionStatuses } from '../price-checker';
 import { addSubscription, getSubscriptions, removeSubscription } from '../subscription';
 import { IUserState } from './types';
 import { ISubscription } from '../subscription/types';
@@ -192,38 +192,55 @@ function processUserDialog(bot: TelegramBot, state: IUserState, text: string): v
 }
 
 /**
- * Завершает создание подписки и уведомляет пользователя
+ * Завершает создание подписки, проверяет цену и уведомляет пользователя
  * @param bot Экземпляр бота
  * @param state Состояние пользователя
  */
-function createSubscription(bot: TelegramBot, state: IUserState): void {
+async function createSubscription(bot: TelegramBot, state: IUserState): Promise<void> {
   const { chatId, subscription } = state;
   
-  // Создаем и сохраняем подписку
-  addSubscription(subscription as ISubscription)
-    .then(() => {
-      let message = '✅ Подписка успешно создана!\n\n';
-      message += `🏙 Откуда: ${subscription.origin}\n`;
-      message += `🏝 Куда: ${subscription.destination}\n`;
-      
-      if (subscription.dateType === 'single') {
-        message += `📅 Дата: ${subscription.date}\n`;
-      } else {
-        message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n`;
-      }
-      
-      message += '\nВы получите уведомление, когда найдутся билеты по низкой цене.';
-      
-      bot.sendMessage(chatId, message);
-      
-      // Сбрасываем состояние пользователя
-      userStates.delete(chatId);
-    })
-    .catch(error => {
-      console.error('Ошибка при создании подписки:', error);
-      bot.sendMessage(chatId, '❌ Произошла ошибка при создании подписки. Попробуйте еще раз.');
-      userStates.delete(chatId);
-    });
+  try {
+    // Создаем и сохраняем подписку
+    const newSubscription = await addSubscription(subscription as ISubscription);
+    
+    // Отправляем начальное сообщение о создании подписки
+    let message = '✅ Подписка успешно создана!\n\n';
+    message += `🏙 Откуда: ${subscription.origin}\n`;
+    message += `🏝 Куда: ${subscription.destination}\n`;
+    
+    if (subscription.dateType === 'single') {
+      message += `📅 Дата: ${subscription.date}\n`;
+    } else {
+      message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n`;
+    }
+    
+    message += '\nЗапускаю проверку цен...';
+    
+    // Отправляем первое сообщение
+    await bot.sendMessage(chatId, message);
+    
+    // Проверяем цену
+    const result = await checkSubscriptionPrice(newSubscription);
+    
+    if (result.success) {
+      // Используем общую функцию для форматирования сообщения
+      const resultMessage = formatPriceCheckMessage(newSubscription, result);
+      await bot.sendMessage(chatId, resultMessage);
+    } else {
+      // Если не удалось получить цену
+      await bot.sendMessage(
+        chatId, 
+        `⚠️ ${result.message || 'Не удалось получить информацию о ценах. Проверка будет повторена по расписанию.'}`
+      );
+    }
+    
+    // Сбрасываем состояние пользователя
+    userStates.delete(chatId);
+  } catch (error) {
+    console.error('Ошибка при создании подписки:', error);
+    await bot.sendMessage(chatId, '❌ Произошла ошибка при создании подписки. Попробуйте еще раз.');
+    userStates.delete(chatId);
+  }
 }
 
 /**
@@ -261,147 +278,4 @@ export function setupCallbackQueryHandlers(bot: TelegramBot): void {
       });
     }
   });
-}
-
-/**
- * Отправляет сообщение пользователю
- * @param bot Экземпляр бота
- * @param chatId ID чата
- * @param message Текст сообщения
- */
-export function sendMessage(bot: TelegramBot, chatId: string | number, message: string): void {
-  bot.sendMessage(chatId, message);
-}
-
-/**
- * Отправляет уведомление о снижении или повышении цены
- * @param bot Экземпляр бота
- * @param subscription Подписка
- * @param newPrice Новая цена
- * @param oldPrice Старая цена
- */
-export function sendPriceAlert(
-  bot: TelegramBot, 
-  subscription: ISubscription, 
-  newPrice: number, 
-  oldPrice: number
-): void {
-  const priceDiff = Math.abs(oldPrice - newPrice);
-  const percentDiff = Math.round(priceDiff / oldPrice * 100);
-  const isPriceDecreased = newPrice < oldPrice;
-  
-  let message = isPriceDecreased 
-    ? `✅ Снижение цены на билеты!\n\n`
-    : `📈 Изменение цены на билеты!\n\n`;
-    
-  message += `${subscription.origin} ➡️ ${subscription.destination}\n`;
-  
-  if (subscription.dateType === 'single') {
-    message += `📅 Дата: ${subscription.date}\n`;
-  } else {
-    message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n`;
-    if (subscription.bestDate) {
-      message += `📅 Лучшая дата: ${subscription.bestDate}\n`;
-    }
-  }
-  
-  message += `\n💰 Старая цена: ${oldPrice} руб.\n`;
-  message += `💰 Новая цена: ${newPrice} руб.\n`;
-  
-  if (isPriceDecreased) {
-    if (percentDiff >= 20) {
-      message += `💹 Значительное снижение: ${priceDiff} руб. (-${percentDiff}%)! 🔥\n`;
-      message += `\nРекомендуем рассмотреть покупку билетов!`;
-    } else {
-      message += `💹 Снижение: ${priceDiff} руб. (-${percentDiff}%)\n`;
-    }
-  } else {
-    if (percentDiff >= 20) {
-      message += `📈 Значительное повышение: ${priceDiff} руб. (+${percentDiff}%) ⚠️\n`;
-    } else {
-      message += `📈 Повышение: ${priceDiff} руб. (+${percentDiff}%)\n`;
-    }
-  }
-  
-  sendMessage(bot, subscription.chatId, message);
-}
-
-/**
- * Отправляет уведомление об изменении лучших дат
- * @param bot Экземпляр бота
- * @param subscription Подписка
- * @param bestDates Массив лучших дат с ценами
- * @param oldPrice Предыдущая цена (если есть)
- */
-export function sendBestDatesAlert(
-  bot: TelegramBot, 
-  subscription: ISubscription, 
-  bestDates: Array<{date: string, price: number, originCode?: string, destinationCode?: string}>,
-  oldPrice: number | undefined
-): void {
-  const newPrice = bestDates[0].price;
-  let priceChanged = oldPrice !== undefined && oldPrice !== newPrice;
-  
-  let title, priceChangeText = '';
-  
-  if (priceChanged) {
-    const priceDiff = Math.abs(oldPrice! - newPrice);
-    const percentDiff = Math.round(priceDiff / oldPrice! * 100);
-    const isPriceDecreased = newPrice < oldPrice!;
-    
-    title = isPriceDecreased 
-      ? `✅ Снижение цены на билеты!`
-      : `📈 Изменение цены на билеты!`;
-      
-    if (isPriceDecreased) {
-      if (percentDiff >= 20) {
-        priceChangeText = `💹 Значительное снижение: ${priceDiff} руб. (-${percentDiff}%)! 🔥\n`;
-        priceChangeText += `\nРекомендуем рассмотреть покупку билетов!`;
-      } else {
-        priceChangeText = `💹 Снижение: ${priceDiff} руб. (-${percentDiff}%)\n`;
-      }
-    } else {
-      if (percentDiff >= 20) {
-        priceChangeText = `📈 Значительное повышение: ${priceDiff} руб. (+${percentDiff}%) ⚠️\n`;
-      } else {
-        priceChangeText = `📈 Повышение: ${priceDiff} руб. (+${percentDiff}%)\n`;
-      }
-    }
-  } else {
-    title = `📅 Обновление лучших дат для поездки!`;
-  }
-  
-  let message = `${title}\n\n`;
-  message += `${subscription.origin} ➡️ ${subscription.destination}\n`;
-  message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n\n`;
-  
-  message += `💰 ${priceChanged ? 'Новая минимальная цена' : 'Минимальная цена'}: ${newPrice} руб.\n`;
-  
-  if (priceChanged && oldPrice !== undefined) {
-    message += `💰 Предыдущая минимальная цена: ${oldPrice} руб.\n`;
-    message += priceChangeText + '\n';
-  }
-  
-  if (bestDates.length === 1) {
-    message += `\n📅 Лучшая дата: ${bestDates[0].date}\n`;
-    
-    // Добавляем информацию об аэропортах, если она есть
-    if (bestDates[0].originCode && bestDates[0].destinationCode) {
-      message += `✈️ Маршрут: ${bestDates[0].originCode} → ${bestDates[0].destinationCode}\n`;
-    }
-  } else {
-    message += `\n📅 Лучшие даты (${bestDates.length}):\n`;
-    bestDates.forEach((item, index) => {
-      message += `   ${index + 1}. ${item.date}`;
-      
-      // Добавляем информацию об аэропортах, если она есть
-      if (item.originCode && item.destinationCode) {
-        message += ` (${item.originCode} → ${item.destinationCode})`;
-      }
-      
-      message += `\n`;
-    });
-  }
-  
-  sendMessage(bot, subscription.chatId, message);
 }
