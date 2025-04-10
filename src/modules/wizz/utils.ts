@@ -6,8 +6,28 @@ import { AIRPORTS_CODES, CITY_CODES } from './config';
  * @returns Дата в формате YYYY-MM-DD
  */
 export function convertDateFormat(date: string): string {
-  const [day, month, year] = date.split('.');
-  return `${year}-${month}-${day}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+  
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
+    const [day, month, year] = date.split('.');
+    return `${year}-${month}-${day}`;
+  }
+  
+  try {
+    const dateObj = new Date(date);
+    if (!isNaN(dateObj.getTime())) {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {
+    console.error(`Ошибка при парсинге даты ${date}:`, e);
+  }
+  
+  throw new Error(`Не удалось преобразовать дату ${date}`);
 }
 
 export function getAirportCode(cityOrCode: string): string | null {

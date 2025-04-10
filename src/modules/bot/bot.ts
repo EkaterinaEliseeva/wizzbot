@@ -274,7 +274,7 @@ export function sendMessage(bot: TelegramBot, chatId: string | number, message: 
 }
 
 /**
- * Отправляет уведомление о снижении цены
+ * Отправляет уведомление о снижении или повышении цены
  * @param bot Экземпляр бота
  * @param subscription Подписка
  * @param newPrice Новая цена
@@ -286,26 +286,41 @@ export function sendPriceAlert(
   newPrice: number, 
   oldPrice: number
 ): void {
-  const priceDiff = oldPrice - newPrice;
+  const priceDiff = Math.abs(oldPrice - newPrice);
   const percentDiff = Math.round(priceDiff / oldPrice * 100);
+  const isPriceDecreased = newPrice < oldPrice;
   
-  let message = `✅ Снижение цены на билеты!\n\n`;
+  let message = isPriceDecreased 
+    ? `✅ Снижение цены на билеты!\n\n`
+    : `📈 Изменение цены на билеты!\n\n`;
+    
   message += `${subscription.origin} ➡️ ${subscription.destination}\n`;
   
   if (subscription.dateType === 'single') {
     message += `📅 Дата: ${subscription.date}\n`;
   } else {
     message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n`;
+    if (subscription.bestDate) {
+      message += `📅 Лучшая дата: ${subscription.bestDate}\n`;
+    }
   }
   
-  message += `\n💰 Старая цена: ${oldPrice} USD\n`;
-  message += `💰 Новая цена: ${newPrice} USD\n`;
+  message += `\n💰 Старая цена: ${oldPrice} руб.\n`;
+  message += `💰 Новая цена: ${newPrice} руб.\n`;
   
-  if (percentDiff >= 20) {
-    message += `💹 Значительное снижение: ${priceDiff} USD (-${percentDiff}%)! 🔥\n`;
-    message += `\nРекомендуем рассмотреть покупку билетов!`;
+  if (isPriceDecreased) {
+    if (percentDiff >= 20) {
+      message += `💹 Значительное снижение: ${priceDiff} руб. (-${percentDiff}%)! 🔥\n`;
+      message += `\nРекомендуем рассмотреть покупку билетов!`;
+    } else {
+      message += `💹 Снижение: ${priceDiff} руб. (-${percentDiff}%)\n`;
+    }
   } else {
-    message += `💹 Снижение: ${priceDiff} USD (-${percentDiff}%)\n`;
+    if (percentDiff >= 20) {
+      message += `📈 Значительное повышение: ${priceDiff} руб. (+${percentDiff}%) ⚠️\n`;
+    } else {
+      message += `📈 Повышение: ${priceDiff} руб. (+${percentDiff}%)\n`;
+    }
   }
   
   sendMessage(bot, subscription.chatId, message);

@@ -18,44 +18,43 @@ export async function checkFlightPrice(
   date?: string
 ): Promise<number | null> {
   try {    
-    // Получаем IATA коды аэропортов
     const originCode = getAirportCode(origin);
     const destinationCode = getAirportCode(destination);
-    
-    // Проверяем, что коды аэропортов найдены
+
     if (!originCode || !destinationCode) {
       console.error(`Не удалось найти код IATA для ${!originCode ? origin : destination}`);
       return null;
     }
 
-    // Если дата не указана, используем текущую дату
     if (!date) {
       const currentDate = new Date();
       const year = currentDate.getFullYear();
       const month = String(currentDate.getMonth() + 1).padStart(2, '0');
       const day = String(currentDate.getDate()).padStart(2, '0');
-      date = `${year}-${month}-${day}`;
-    } else {
-      date = convertDateFormat(date);
+      date = `${day}.${month}.${year}`;
     }
+    
+    const formattedDate = convertDateFormat(date);
 
-    console.log(`Проверяем цену для ${origin}-${destination} на дату ${date}`);
+    console.log(`Проверяем цену для ${origin}(${originCode})-${destination}(${destinationCode}) на дату ${formattedDate}`);
     
-    const flightsData = await getFlightsFromTimetable(originCode, destinationCode, date);
+    const flightsData = await getFlightsFromTimetable(originCode, destinationCode, formattedDate);
     
-    if (flightsData) {
+    if (flightsData && flightsData.outboundFlights && flightsData.outboundFlights.length > 0) {
       const currentDateFlight = flightsData.outboundFlights.find(flight => {
-        const flightDateStr = flight.departureDate?.split('T')[0];
-
-        return flightDateStr === date;
+        if (!flight.departureDate) return false;
+        const flightDateStr = flight.departureDate.split('T')[0];
+        return flightDateStr === formattedDate;
       });
       
-      const price = Number(currentDateFlight?.price.amount);
-
-      return price;
+      if (currentDateFlight) {
+        const price = Number(currentDateFlight.price.amount);
+        console.log(`Найдена цена ${price} для ${origin}-${destination} на дату ${formattedDate}`);
+        return price;
+      } 
     }
     
-    console.log(`Не удалось получить цену для ${origin}-${destination} на дату ${date}`);
+    console.log(`Не удалось получить цену для ${origin}-${destination} на дату ${formattedDate}`);
     return null;
   } catch (error) {
     console.error('Ошибка при получении данных:', 
