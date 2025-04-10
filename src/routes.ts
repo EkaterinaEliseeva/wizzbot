@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
-import {  getFlightsFromTimetable } from './modules/wizz';
+import { checkFlightPriceRange } from './modules/price-checker';
 
 /**
  * Маршрут для тестирования заполнения формы поиска билетов
  */
 export const testRoute = async (req: Request, res: Response) => {
   try {
-    const result = await getFlightsFromTimetable('EVN', 'ROM', '2025-06-18');
+    const result = await checkFlightPriceRange('Ереван', 'Рим', '2025-06-18', '2025-06-25');
     
     console.log(result)
   } catch (error) {
