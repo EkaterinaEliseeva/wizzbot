@@ -63,7 +63,7 @@ export async function checkFlightPrice(
           
           if (currentDateFlight) {
             const price = Number(currentDateFlight.price.amount);
-            console.log(`Найдена цена ${price} руб. для ${originCode} -> ${destinationCode} на дату ${formattedDate}`);
+            console.log(`Найдена цена ${price} USD для ${originCode} -> ${destinationCode} на дату ${formattedDate}`);
             prices.push({
               price,
               originCode,
@@ -83,7 +83,7 @@ export async function checkFlightPrice(
         }
       }
       
-      console.log(`Минимальная цена среди всех комбинаций: ${minPriceInfo.price} руб. (${minPriceInfo.originCode} -> ${minPriceInfo.destinationCode})`);
+      console.log(`Минимальная цена среди всех комбинаций: ${minPriceInfo.price} USD (${minPriceInfo.originCode} -> ${minPriceInfo.destinationCode})`);
       return {
         price: minPriceInfo.price,
         flightInfo: {
@@ -161,7 +161,7 @@ export async function checkFlightPriceRange(
               const price = Number(currentDateFlight.price.amount);
               const readableDate = formatDateForDisplay(dateStr);
               
-              console.log(`${readableDate}: ${price} руб. (${originCode} -> ${destinationCode})`);
+              console.log(`${readableDate}: ${price} USD (${originCode} -> ${destinationCode})`);
               allResults.push({ 
                 date: readableDate, 
                 price, 
@@ -194,7 +194,7 @@ export async function checkFlightPriceRange(
     
     console.log(`Лучшие даты и комбинации аэропортов:`);
     bestDates.forEach(item => {
-      console.log(`${item.date}: ${item.price} руб. (${item.originCode} -> ${item.destinationCode})`);
+      console.log(`${item.date}: ${item.price} USD (${item.originCode} -> ${item.destinationCode})`);
     });
     
     return {
@@ -257,7 +257,7 @@ export async function getSubscriptionStatuses(subscriptions: ISubscription[]) {
       }
 
       if (lastPrice) {
-        message += `   💰 Текущая цена: ${lastPrice} руб.\n`;
+        message += `   💰 Текущая цена: ${lastPrice} USD\n`;
       } else {
         message += `   💰 Цена: информация недоступна\n`;
       }
@@ -445,23 +445,23 @@ export function formatSingleDatePriceMessage(
     message += `✈️ Рейс: ${result.flightInfo.originCode} → ${result.flightInfo.destinationCode}\n\n`;
   }
   
-  message += `💰 Текущая цена: ${result.newPrice} руб.\n`;
+  message += `💰 Текущая цена: ${result.newPrice} USD\n`;
 
   if (result.oldPrice !== undefined) {
-    message += `💰 Предыдущая цена: ${result.oldPrice} руб.\n`;
+    message += `💰 Предыдущая цена: ${result.oldPrice} USD\n`;
 
     if (result.priceChanged) {
       const priceDiff = Math.abs(result.oldPrice - result.newPrice!);
       const percentDiff = Math.round(priceDiff / result.oldPrice * 100);
 
       if (result.newPrice! < result.oldPrice) {
-        message += `💹 Снижение: ${priceDiff} руб. (-${percentDiff}%)\n`;
+        message += `💹 Снижение: ${priceDiff} USD (-${percentDiff}%)\n`;
         
         if (percentDiff >= 20) {
           message += `\n🔥 Рекомендуем рассмотреть покупку билетов!\n`;
         }
       } else {
-        message += `📈 Повышение: ${priceDiff} руб. (+${percentDiff}%)\n`;
+        message += `📈 Повышение: ${priceDiff} USD (+${percentDiff}%)\n`;
       }
     } else {
       message += `⏸ Цена не изменилась\n`;
@@ -484,23 +484,23 @@ export function formatDateRangePriceMessage(
   let message = `✅ Проверка цен завершена!\n\n`;
   message += `${subscription.origin} ➡️ ${subscription.destination}\n`;
   message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n\n`;
-  message += `💰 Минимальная цена: ${result.newPrice} руб.\n`;
+  message += `💰 Минимальная цена: ${result.newPrice} USD\n`;
 
   if (result.oldPrice !== undefined) {
-    message += `💰 Предыдущая минимальная цена: ${result.oldPrice} руб.\n`;
+    message += `💰 Предыдущая минимальная цена: ${result.oldPrice} USD\n`;
 
     if (result.priceChanged) {
       const priceDiff = Math.abs(result.oldPrice - result.newPrice!);
       const percentDiff = Math.round(priceDiff / result.oldPrice * 100);
 
       if (result.newPrice! < result.oldPrice) {
-        message += `💹 Снижение: ${priceDiff} руб. (-${percentDiff}%)\n`;
+        message += `💹 Снижение: ${priceDiff} USD (-${percentDiff}%)\n`;
         
         if (percentDiff >= 20) {
           message += `\n🔥 Рекомендуем рассмотреть покупку билетов!\n`;
         }
       } else {
-        message += `📈 Повышение: ${priceDiff} руб. (+${percentDiff}%)\n`;
+        message += `📈 Повышение: ${priceDiff} USD (+${percentDiff}%)\n`;
       }
     } else {
       message += `⏸ Минимальная цена не изменилась\n`;

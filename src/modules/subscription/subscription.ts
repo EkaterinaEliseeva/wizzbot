@@ -185,3 +185,15 @@ export function areBestDatesChanged(
   
   return newDatesNotInOld.length > 0;
 }
+
+/**
+ * Получает подписку по ID
+ * @param subscriptionId ID подписки
+ * @returns Подписка или null, если не найдена
+ */
+export async function getSubscriptionById(subscriptionId: string): Promise<ISubscription | null> {
+  const subscriptions = await loadSubscriptions();
+  const subscription = subscriptions.find(sub => sub.id === subscriptionId);
+  
+  return subscription || null;
+}

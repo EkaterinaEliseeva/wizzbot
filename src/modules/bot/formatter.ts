@@ -37,8 +37,8 @@ export function formatPriceAlertMessage(
     message += `✈️ Рейс: ${flightInfo.originCode} → ${flightInfo.destinationCode}\n`;
   }
   
-  message += `\n💰 Старая цена: ${oldPrice} руб.\n`;
-  message += `💰 Новая цена: ${newPrice} руб.\n`;
+  message += `\n💰 Старая цена: ${oldPrice} USD\n`;
+  message += `💰 Новая цена: ${newPrice} USD\n`;
   
   message += formatPriceChangeText(oldPrice, newPrice);
   
@@ -75,10 +75,10 @@ export function formatBestDatesAlertMessage(
   message += `${subscription.origin} ➡️ ${subscription.destination}\n`;
   message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n\n`;
   
-  message += `💰 ${priceChanged ? 'Новая минимальная цена' : 'Минимальная цена'}: ${newPrice} руб.\n`;
+  message += `💰 ${priceChanged ? 'Новая минимальная цена' : 'Минимальная цена'}: ${newPrice} USD\n`;
   
   if (priceChanged && oldPrice !== undefined) {
-    message += `💰 Предыдущая минимальная цена: ${oldPrice} руб.\n`;
+    message += `💰 Предыдущая минимальная цена: ${oldPrice} USD\n`;
     message += formatPriceChangeText(oldPrice, newPrice) + '\n';
   }
   
@@ -164,7 +164,7 @@ export function formatFirstCheckMessage(
     }
   }
   
-  message += `\n💰 Текущая цена: ${price} руб.\n`;
+  message += `\n💰 Текущая цена: ${price} USD\n`;
   message += `\nВы будете получать уведомления при изменении цены.`;
   
   return message;

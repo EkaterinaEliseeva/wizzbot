@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { checkSubscriptionPrice, formatPriceCheckMessage, getSubscriptionStatuses } from '../price-checker';
-import { addSubscription, getSubscriptions, removeSubscription } from '../subscription';
+import { addSubscription, getSubscriptionById, getSubscriptions, removeSubscription } from '../subscription';
 import { IUserState } from './types';
 import { ISubscription } from '../subscription/types';
 
@@ -83,6 +83,44 @@ export function initBot(token: string): TelegramBot {
     const message = await getSubscriptionStatuses(subscriptions)
     
     bot.sendMessage(chatId, message);
+  });
+
+  bot.onText(/\/check_(.+)/, async (msg, match) => {
+    if (!match || !match[1]) return;
+    
+    const chatId = msg.chat.id;
+    const subscriptionId = match[1];
+    
+    try {
+      const subscription = await getSubscriptionById(subscriptionId);
+      
+      if (!subscription) {
+        bot.sendMessage(chatId, '❌ Подписка не найдена.');
+        return;
+      }
+      
+      // Проверяем, что подписка принадлежит этому пользователю
+      if (subscription.chatId !== chatId) {
+        bot.sendMessage(chatId, '❌ У вас нет доступа к этой подписке.');
+        return;
+      }
+      
+      await bot.sendMessage(chatId, '🔍 Проверяю текущие цены...');
+      
+      // Проверяем цену
+      const result = await checkSubscriptionPrice(subscription);
+      
+      if (result.success) {
+        // Используем общую функцию для форматирования сообщения
+        const message = formatPriceCheckMessage(subscription, result);
+        bot.sendMessage(chatId, message);
+      } else {
+        bot.sendMessage(chatId, `❌ ${result.message || 'Не удалось получить информацию о ценах.'}`);
+      }
+    } catch (error) {
+      console.error('Ошибка при проверке цены:', error);
+      bot.sendMessage(chatId, '❌ Произошла ошибка при проверке цены. Попробуйте позже.');
+    }
   });
 
   // Обработчик команд удаления подписки

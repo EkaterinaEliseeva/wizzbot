@@ -41,16 +41,16 @@ export function formatPriceChangeText(oldPrice: number, newPrice: number): strin
   
   if (isDecrease) {
     if (isSignificant) {
-      message += `💹 Значительное снижение: ${diff} руб. (-${percentDiff}%)! 🔥\n`;
+      message += `💹 Значительное снижение: ${diff} USD (-${percentDiff}%)! 🔥\n`;
       message += `\nРекомендуем рассмотреть покупку билетов!`;
     } else {
-      message += `💹 Снижение: ${diff} руб. (-${percentDiff}%)\n`;
+      message += `💹 Снижение: ${diff} USD (-${percentDiff}%)\n`;
     }
   } else {
     if (isSignificant) {
-      message += `📈 Значительное повышение: ${diff} руб. (+${percentDiff}%) ⚠️\n`;
+      message += `📈 Значительное повышение: ${diff} USD (+${percentDiff}%) ⚠️\n`;
     } else {
-      message += `📈 Повышение: ${diff} руб. (+${percentDiff}%)\n`;
+      message += `📈 Повышение: ${diff} USD (+${percentDiff}%)\n`;
     }
   }
   
@@ -87,10 +87,10 @@ export function createPriceCheckDetailMessage(
   
   // Добавляем цены
   if ('newPrice' in result && result.newPrice !== undefined) {
-    message += `💰 Текущая цена: ${result.newPrice} руб.\n`;
+    message += `💰 Текущая цена: ${result.newPrice} USD\n`;
     
     if ('oldPrice' in result && result.oldPrice !== undefined) {
-      message += `💰 Предыдущая цена: ${result.oldPrice} руб.\n`;
+      message += `💰 Предыдущая цена: ${result.oldPrice} USD\n`;
       
       if (result.priceChanged) {
         message += formatPriceChangeText(result.oldPrice, result.newPrice);
