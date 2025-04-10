@@ -10,5 +10,6 @@ export interface ISubscription {
     maxPrice?: number; 
     lastPrice?: number;
     bestDate?: string;
+    bestDates?: Array<{date: string, price: number}>;
     createdAt: Date;
 }

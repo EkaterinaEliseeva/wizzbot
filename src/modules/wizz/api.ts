@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { ITimetableRequestParams, ITimetableResponse, IWizzairSearchParams, IWizzairSearchResponse, TIataCode } from './types';
-import { getCalendarMonthBoundaries } from './utils';
+import { getCalendarMonthBoundaries } from '../../utils';
 
 function logApiError(error: unknown) {
     console.error('Ошибка при получении данных из Wizzair API:', 

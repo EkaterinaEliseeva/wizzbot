@@ -325,3 +325,71 @@ export function sendPriceAlert(
   
   sendMessage(bot, subscription.chatId, message);
 }
+
+/**
+ * Отправляет уведомление об изменении лучших дат
+ * @param bot Экземпляр бота
+ * @param subscription Подписка
+ * @param bestDates Массив лучших дат с ценами
+ * @param oldPrice Предыдущая цена (если есть)
+ */
+export function sendBestDatesAlert(
+  bot: TelegramBot, 
+  subscription: ISubscription, 
+  bestDates: Array<{date: string, price: number}>,
+  oldPrice: number | undefined
+): void {
+  const newPrice = bestDates[0].price;
+  let priceChanged = oldPrice !== undefined && oldPrice !== newPrice;
+  
+  let title, priceChangeText = '';
+  
+  if (priceChanged) {
+    const priceDiff = Math.abs(oldPrice! - newPrice);
+    const percentDiff = Math.round(priceDiff / oldPrice! * 100);
+    const isPriceDecreased = newPrice < oldPrice!;
+    
+    title = isPriceDecreased 
+      ? `✅ Снижение цены на билеты!`
+      : `📈 Изменение цены на билеты!`;
+      
+    if (isPriceDecreased) {
+      if (percentDiff >= 20) {
+        priceChangeText = `💹 Значительное снижение: ${priceDiff} руб. (-${percentDiff}%)! 🔥\n`;
+        priceChangeText += `\nРекомендуем рассмотреть покупку билетов!`;
+      } else {
+        priceChangeText = `💹 Снижение: ${priceDiff} руб. (-${percentDiff}%)\n`;
+      }
+    } else {
+      if (percentDiff >= 20) {
+        priceChangeText = `📈 Значительное повышение: ${priceDiff} руб. (+${percentDiff}%) ⚠️\n`;
+      } else {
+        priceChangeText = `📈 Повышение: ${priceDiff} руб. (+${percentDiff}%)\n`;
+      }
+    }
+  } else {
+    title = `📅 Обновление лучших дат для поездки!`;
+  }
+  
+  let message = `${title}\n\n`;
+  message += `${subscription.origin} ➡️ ${subscription.destination}\n`;
+  message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n\n`;
+  
+  message += `💰 ${priceChanged ? 'Новая минимальная цена' : 'Минимальная цена'}: ${newPrice} руб.\n`;
+  
+  if (priceChanged && oldPrice !== undefined) {
+    message += `💰 Предыдущая минимальная цена: ${oldPrice} руб.\n`;
+    message += priceChangeText + '\n';
+  }
+  
+  if (bestDates.length === 1) {
+    message += `\n📅 Лучшая дата: ${bestDates[0].date}\n`;
+  } else {
+    message += `\n📅 Лучшие даты (${bestDates.length}):\n`;
+    bestDates.forEach((item, index) => {
+      message += `   ${index + 1}. ${item.date}\n`;
+    });
+  }
+  
+  sendMessage(bot, subscription.chatId, message);
+}

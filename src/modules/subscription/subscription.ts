@@ -138,3 +138,50 @@ export async function updateSubscriptionDetails(
     await saveSubscriptions(subscriptions);
   }
 }
+
+/**
+ * Обновляет информацию о лучших датах для подписки с диапазоном дат
+ * @param subscriptionId ID подписки
+ * @param bestDates Массив лучших дат с ценами
+ * @param minPrice Минимальная цена
+ */
+export async function updateBestDates(
+  subscriptionId: string, 
+  bestDates: Array<{date: string, price: number}>,
+  minPrice: number
+): Promise<void> {
+  await updateSubscriptionDetails(subscriptionId, {
+    lastPrice: minPrice,
+    bestDate: bestDates[0].date,
+    bestDates: bestDates
+  });
+}
+
+/**
+ * Сравнивает два набора лучших дат
+ * @param oldDates Старые лучшие даты
+ * @param newDates Новые лучшие даты
+ * @returns true если наборы различаются
+ */
+export function areBestDatesChanged(
+  oldDates: Array<{date: string, price: number}> | undefined,
+  newDates: Array<{date: string, price: number}>
+): boolean {
+  if (!oldDates || oldDates.length === 0) {
+    return true;
+  }
+  
+  if (oldDates.length !== newDates.length) {
+    return true;
+  } 
+  
+ 
+  if (oldDates[0].price !== newDates[0].price) {
+    return true;
+  }
+  
+  const oldDateSet = new Set(oldDates.map(item => item.date));
+  const newDatesNotInOld = newDates.filter(item => !oldDateSet.has(item.date));
+  
+  return newDatesNotInOld.length > 0;
+}

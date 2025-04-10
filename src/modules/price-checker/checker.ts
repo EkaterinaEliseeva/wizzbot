@@ -1,9 +1,9 @@
 import { 
-  convertDateFormat, 
   getAirportCode,
   getFlightsFromTimetable,
 } from '../wizz';
 import { ISubscription } from '../subscription/types';
+import { convertDateFormat, formatDateForDisplay, getDatesInRange } from '../../utils';
 
 /**
  * Проверяет текущую цену на авиабилеты для заданной подписки 
@@ -70,14 +70,17 @@ export async function checkFlightPrice(
  * @param destination Город назначения
  * @param startDate Начальная дата диапазона
  * @param endDate Конечная дата диапазона
- * @returns Объект с минимальной ценой и датой или null
+ * @param maxDaysToCheck Максимальное количество дней для проверки
+ * @returns Информация о минимальных ценах и датах
  */
 export async function checkFlightPriceRange(
   origin: string,
   destination: string,
   startDate: string,
-  endDate: string
-) {
+  endDate: string,
+  maxDaysToCheck = Number(process.env.MAX_DAYS_TO_CHECK || 7)
+): Promise<{ bestDates: Array<{date: string, price: number}>, minPrice: number } | null> {
+  try {
     const originCode = getAirportCode(origin);
     const destinationCode = getAirportCode(destination);
     
@@ -89,8 +92,61 @@ export async function checkFlightPriceRange(
     const startDateFormatted = convertDateFormat(startDate);
     const endDateFormatted = convertDateFormat(endDate);
 
-    // TODO
+    console.log(`Проверка цен в диапазоне ${startDateFormatted} - ${endDateFormatted} для ${origin}-${destination}`);
+
+    const dates = getDatesInRange(startDateFormatted, endDateFormatted, maxDaysToCheck);
+
+    const results: Array<{date: string, price: number}> = [];
+
+    const flightsData = await getFlightsFromTimetable(originCode, destinationCode, startDateFormatted);
+    
+    if (flightsData && flightsData.outboundFlights && flightsData.outboundFlights.length > 0) {
+      for (const dateStr of dates) {
+        const currentDateFlight = flightsData.outboundFlights.find(flight => {
+          if (!flight.departureDate) return false;
+          const flightDateStr = flight.departureDate.split('T')[0];
+          return flightDateStr === dateStr;
+        });
+        
+        if (currentDateFlight) {
+          const price = Number(currentDateFlight.price.amount);
+          const readableDate = formatDateForDisplay(dateStr);
+          
+          console.log(`${readableDate}: ${price} USD`);
+          results.push({ date: readableDate, price });
+        }
+      }
+      
+      if (results.length === 0) {
+        console.log(`Не найдено рейсов в указанном диапазоне`);
+        return null;
+      }
+      
+      const minPrice = Math.min(...results.map(item => item.price));
+      const bestDates = results.filter(item => item.price === minPrice);
+      
+      console.log(`Лучшие даты для ${origin}-${destination}:`);
+      bestDates.forEach(item => {
+        console.log(`${item.date}: ${item.price} USD`);
+      });
+      
+      return {
+        bestDates,
+        minPrice
+      };
+    }
+    
+    console.log(`Не удалось получить данные о ценах в указанном диапазоне`);
+    return null;
+  } catch (error) {
+    console.error('Ошибка при получении данных:', 
+      error instanceof Error ? error.message : String(error)
+    );
+    return null;
+  }
 }
+
+
 
 export async function getSubscriptionStatuses(subscriptions: ISubscription[]) {
   let message = '';
