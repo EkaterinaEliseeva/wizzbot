@@ -87,7 +87,10 @@ export async function getFlightsFromTimetable(origin: TIataCode, destination: TI
             requestData
           );
 
-          return response.data;
+          return {
+            ...response.data,
+            outboundFlights: response.data.outboundFlights.filter(flight => flight.departureStation === origin && flight.arrivalStation === destination),
+          }
     } catch(error) {
       logApiError(error);
 

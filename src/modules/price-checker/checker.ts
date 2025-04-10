@@ -237,12 +237,9 @@ export async function getSubscriptionStatuses(subscriptions: ISubscription[]) {
             message += `   🔥 Лучшая дата: ${sub.bestDates[0].date}\n`;
           } else {
             message += `   🔥 Лучшие даты:\n`;
-            sub.bestDates.slice(0, 3).forEach((dateInfo, idx) => { // Показываем до 3 лучших дат
+            sub.bestDates.forEach((dateInfo, idx) => {
               message += `      ${idx + 1}. ${dateInfo.date}\n`;
             });
-            if (sub.bestDates.length > 3) {
-              message += `      ... и ещё ${sub.bestDates.length - 3}\n`;
-            }
           }
         } else if (sub.bestDate) {
           message += `   🔥 Лучшая дата: ${sub.bestDate}\n`;
@@ -510,9 +507,7 @@ export function formatDateRangePriceMessage(
   if (result.bestDates && result.bestDates.length > 0) {
     message += `\n📅 Лучшие даты:\n`;
 
-    // Показываем максимум 5 дат, чтобы сообщение не было слишком длинным
-    const displayDates = result.bestDates.slice(0, 5);
-    displayDates.forEach((item, index) => {
+    result.bestDates.forEach((item, index) => {
       message += `   ${index + 1}. ${item.date}`;
 
       if (item.originCode && item.destinationCode) {
@@ -521,10 +516,6 @@ export function formatDateRangePriceMessage(
 
       message += `\n`;
     });
-
-    if (result.bestDates.length > 5) {
-      message += `   ... и ещё ${result.bestDates.length - 5} дат\n`;
-    }
   }
 
   return message;

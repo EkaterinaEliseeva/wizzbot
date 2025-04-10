@@ -117,9 +117,7 @@ export function createPriceCheckDetailMessage(
     } else {
       message += `\n📅 Лучшие даты:\n`;
       
-      // Показываем максимум 5 дат
-      const displayDates = result.bestDates.slice(0, 5);
-      displayDates.forEach((item, index) => {
+      result.bestDates.forEach((item, index) => {
         message += `   ${index + 1}. ${item.date}`;
         
         // Добавляем информацию о конкретном рейсе
@@ -129,10 +127,6 @@ export function createPriceCheckDetailMessage(
         
         message += `\n`;
       });
-      
-      if (result.bestDates.length > 5) {
-        message += `   ... и ещё ${result.bestDates.length - 5} дат\n`;
-      }
     }
   }
   

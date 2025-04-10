@@ -92,10 +92,8 @@ export function formatBestDatesAlertMessage(
     message += `\n`;
   } else {
     message += `\n📅 Лучшие даты (${bestDates.length}):\n`;
-    
-    // Показываем максимум 5 дат
-    const displayDates = bestDates.slice(0, 5);
-    displayDates.forEach((item, index) => {
+
+    bestDates.forEach((item, index) => {
       message += `   ${index + 1}. ${item.date}`;
       
       if (includeRouteInfo && item.originCode && item.destinationCode) {
@@ -104,10 +102,6 @@ export function formatBestDatesAlertMessage(
       
       message += `\n`;
     });
-    
-    if (bestDates.length > 5) {
-      message += `   ... и ещё ${bestDates.length - 5} дат\n`;
-    }
   }
   
   return message;
@@ -145,9 +139,7 @@ export function formatFirstCheckMessage(
       } else {
         message += `📅 Лучшие даты:\n`;
         
-        // Показываем максимум 3 даты для первого сообщения
-        const displayDates = bestDates.slice(0, 3);
-        displayDates.forEach((item, index) => {
+        bestDates.forEach((item, index) => {
           message += `   ${index + 1}. ${item.date}`;
           
           if (item.originCode && item.destinationCode) {
@@ -156,10 +148,6 @@ export function formatFirstCheckMessage(
           
           message += `\n`;
         });
-        
-        if (bestDates.length > 3) {
-          message += `   ... и ещё ${bestDates.length - 3}\n`;
-        }
       }
     }
   }
