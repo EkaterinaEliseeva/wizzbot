@@ -336,7 +336,7 @@ export function sendPriceAlert(
 export function sendBestDatesAlert(
   bot: TelegramBot, 
   subscription: ISubscription, 
-  bestDates: Array<{date: string, price: number}>,
+  bestDates: Array<{date: string, price: number, originCode?: string, destinationCode?: string}>,
   oldPrice: number | undefined
 ): void {
   const newPrice = bestDates[0].price;
@@ -384,10 +384,22 @@ export function sendBestDatesAlert(
   
   if (bestDates.length === 1) {
     message += `\n📅 Лучшая дата: ${bestDates[0].date}\n`;
+    
+    // Добавляем информацию об аэропортах, если она есть
+    if (bestDates[0].originCode && bestDates[0].destinationCode) {
+      message += `✈️ Маршрут: ${bestDates[0].originCode} → ${bestDates[0].destinationCode}\n`;
+    }
   } else {
     message += `\n📅 Лучшие даты (${bestDates.length}):\n`;
     bestDates.forEach((item, index) => {
-      message += `   ${index + 1}. ${item.date}\n`;
+      message += `   ${index + 1}. ${item.date}`;
+      
+      // Добавляем информацию об аэропортах, если она есть
+      if (item.originCode && item.destinationCode) {
+        message += ` (${item.originCode} → ${item.destinationCode})`;
+      }
+      
+      message += `\n`;
     });
   }
   
