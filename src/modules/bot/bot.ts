@@ -298,14 +298,14 @@ export function sendPriceAlert(
     message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n`;
   }
   
-  message += `\n💰 Старая цена: ${oldPrice} руб.\n`;
-  message += `💰 Новая цена: ${newPrice} руб.\n`;
+  message += `\n💰 Старая цена: ${oldPrice} USD\n`;
+  message += `💰 Новая цена: ${newPrice} USD\n`;
   
   if (percentDiff >= 20) {
-    message += `💹 Значительное снижение: ${priceDiff} руб. (-${percentDiff}%)! 🔥\n`;
+    message += `💹 Значительное снижение: ${priceDiff} USD (-${percentDiff}%)! 🔥\n`;
     message += `\nРекомендуем рассмотреть покупку билетов!`;
   } else {
-    message += `💹 Снижение: ${priceDiff} руб. (-${percentDiff}%)\n`;
+    message += `💹 Снижение: ${priceDiff} USD (-${percentDiff}%)\n`;
   }
   
   sendMessage(bot, subscription.chatId, message);
