@@ -39,7 +39,7 @@ export async function getFligtsFromFarechart(
       };
       
       const response = await axios.post<IWizzairSearchResponse>(
-        'https://be.wizzair.com/27.6.0/Api/asset/farechart',
+        'https://be.wizzair.com/27.7.0/Api/asset/farechart',
         requestData
       );
   
@@ -83,7 +83,7 @@ export async function getFlightsFromTimetable(origin: TIataCode, destination: TI
 
     try {
         const response = await axios.post<ITimetableResponse>(
-            'https://be.wizzair.com/27.6.0/Api/search/timetable',
+            'https://be.wizzair.com/27.7.0/Api/search/timetable',
             requestData
           );
 
