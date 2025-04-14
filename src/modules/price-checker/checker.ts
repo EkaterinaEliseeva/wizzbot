@@ -149,11 +149,14 @@ export async function checkFlightPriceRange(
         const flightsData = await getFlightsFromTimetable(originCode, destinationCode, startDateFormatted);
         
         if (flightsData && flightsData.outboundFlights && flightsData.outboundFlights.length > 0) {
-          // Проверяем цены для каждой даты в диапазоне
           for (const dateStr of dates) {
             const currentDateFlight = flightsData.outboundFlights.find(flight => {
-              if (!flight.departureDate) return false;
+              if (!flight.departureDate) {
+                return false;
+              } 
+
               const flightDateStr = flight.departureDate.split('T')[0];
+
               return flightDateStr === dateStr;
             });
             
@@ -162,6 +165,7 @@ export async function checkFlightPriceRange(
               const readableDate = formatDateForDisplay(dateStr);
               
               console.log(`${readableDate}: ${price} USD (${originCode} -> ${destinationCode})`);
+
               allResults.push({ 
                 date: readableDate, 
                 price, 
@@ -179,10 +183,8 @@ export async function checkFlightPriceRange(
       return null;
     }
     
-    // Находим минимальную цену среди всех комбинаций
     const minPrice = Math.min(...allResults.map(item => item.price));
     
-    // Находим все даты с минимальной ценой
     const bestDates = allResults
       .filter(item => item.price === minPrice)
       .map(item => ({

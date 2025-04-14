@@ -31,13 +31,13 @@ export const priceCheckJob = (bot: TelegramBot) => new CronJob(
               console.log(`Цена изменилась: ${result.oldPrice} -> ${result.newPrice}`);
               sendPriceAlert(bot, subscription, result.newPrice!, result.oldPrice!);
             } else if (isDateRangeResult(result) && (result.priceChanged || result.datesChanged)) {
-              // Для диапазона дат
               if (result.priceChanged) {
                 console.log(`Минимальная цена изменилась: ${result.oldPrice} -> ${result.newPrice}`);
               }
               if (result.datesChanged) {
                 console.log(`Изменился список лучших дат`);
               }
+
               sendBestDatesAlert(bot, subscription, result.bestDates!, result.oldPrice);
             } else {
               console.log(`Изменений нет, уведомления не отправляются`);

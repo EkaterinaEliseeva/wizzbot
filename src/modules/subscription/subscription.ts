@@ -164,26 +164,42 @@ export async function updateBestDates(
  * @returns true если наборы различаются
  */
 export function areBestDatesChanged(
-  oldDates: Array<{date: string, price: number}> | undefined,
-  newDates: Array<{date: string, price: number}>
+  oldDates: Array<{date: string, price: number, originCode?: string, destinationCode?: string}> | undefined,
+  newDates: Array<{date: string, price: number, originCode?: string, destinationCode?: string}>
 ): boolean {
+  // Если старые даты не определены или их нет, то считаем, что произошло изменение
   if (!oldDates || oldDates.length === 0) {
     return true;
   }
   
+  // Если количество дат отличается, то произошло изменение
   if (oldDates.length !== newDates.length) {
     return true;
   } 
   
- 
+  // Если цена изменилась, то произошло изменение
   if (oldDates[0].price !== newDates[0].price) {
     return true;
   }
   
+  // Создаем множества дат для сравнения
   const oldDateSet = new Set(oldDates.map(item => item.date));
-  const newDatesNotInOld = newDates.filter(item => !oldDateSet.has(item.date));
+  const newDateSet = new Set(newDates.map(item => item.date));
   
-  return newDatesNotInOld.length > 0;
+  // Проверяем, совпадают ли наборы дат
+  if (oldDateSet.size !== newDateSet.size) {
+    return true;
+  }
+  
+  // Проверяем, что все даты из старого набора есть в новом
+  for (const date of oldDateSet) {
+    if (!newDateSet.has(date)) {
+      return true;
+    }
+  }
+  
+  // Если дошли до этой точки, то изменений нет
+  return false;
 }
 
 /**
