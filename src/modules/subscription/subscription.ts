@@ -122,13 +122,16 @@ export async function updateSubscriptionDetails(
   const subscription = subscriptions.find(sub => sub.id === subscriptionId);
   
   if (subscription) {
-    // Обновляем все поля, присутствующие в updates
     if (updates.lastPrice !== undefined) {
       subscription.lastPrice = updates.lastPrice;
     }
     
     if (updates.bestDate !== undefined) {
       subscription.bestDate = updates.bestDate;
+    }
+
+    if (updates.bestDates !== undefined) {
+      subscription.bestDates = updates.bestDates;
     }
     
     if (updates.maxPrice !== undefined) {
