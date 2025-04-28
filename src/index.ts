@@ -1,48 +1,52 @@
 import dotenv from 'dotenv';
-import express, { Request, Response } from 'express';
-import { CronJob } from 'cron';
-import { initBot, setupCallbackQueryHandlers } from './modules/bot';
-import { testRoute } from './routes';
-import { priceCheckJob } from './planner';
+import type { Request, Response } from 'express';
+import express from 'express';
 
-// Загружаем переменные окружения
+import { Bot } from './modules/bot';
+import { FileSystemManager } from './modules/file-system';
+import { Logger } from './modules/logger';
+import { Planner } from './modules/planner';
+import { PriceChecker } from './modules/price-checker';
+import { SubscriptionManager } from './modules/subscription';
+import { WizzApi } from './modules/wizz';
+import { testRoute } from './routes';
+
 dotenv.config();
 
-// Проверка наличия обязательных переменных окружения
 if (!process.env.TELEGRAM_BOT_TOKEN) {
   throw new Error('TELEGRAM_BOT_TOKEN не задан в .env файле');
 }
 
-// Инициализация Express сервера
+if (!process.env.WIZZ_API_URL) {
+  throw new Error('WIZZ_API_URL не задан в .env файле');
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+function startApp(): void {
+  const logger = new Logger();
+  const fileSystemManager = new FileSystemManager();
+  const subscriptionsManager = new SubscriptionManager(fileSystemManager);
+  const api = new WizzApi(process.env.WIZZ_API_URL as string);
+  const priceChecker = new PriceChecker(logger, api, subscriptionsManager);
 
-// Инициализация Telegram бота
-const bot = initBot(process.env.TELEGRAM_BOT_TOKEN);
-setupCallbackQueryHandlers(bot);
+  const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN as string, subscriptionsManager, priceChecker);
+  const priceCheckInterval = process.env.CHECK_INTERVAL || '0 */1 * * *';
 
-const cron = priceCheckJob(bot);
+  new Planner().addJob(priceCheckInterval, () => priceChecker.check(bot));
+}
 
-// Маршрут для принудительной проверки цен
-app.get('/check-prices', async (_req: Request, res: Response) => {
-  try {
-    cron.fireOnTick();
-    res.send('Проверка цен запущена');
-  } catch (error) {
-    res.status(500).send('Ошибка при запуске проверки цен');
-  }
-});
+startApp();
 
-// Запуск сервера
 app.get('/', (_req: Request, res: Response) => {
-  res.send('Flight Price Tracker работает!');
+  res.send('Flight Price Tracker is working!');
 });
 
 app.listen(PORT, () => {
-  console.log(`Сервер запущен на порту ${PORT}`);
-  console.log('Бот запущен и ожидает сообщений');
-  console.log(`Проверка цен запланирована: ${process.env.CHECK_INTERVAL || '0 */1 * * *'}`);
+  console.log(`Server is running on port ${PORT}`);
+  console.log('Bot started');
+  console.log(`Price check planned: ${process.env.CHECK_INTERVAL || '0 */1 * * *'}`);
 });
 
 app.get('/test', testRoute);

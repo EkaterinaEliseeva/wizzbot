@@ -1,3 +1,1 @@
-export * from './bot';
-export * from './formatter';
-export * from './messager';
+export * from './Bot';

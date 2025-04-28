@@ -1,319 +1,353 @@
 import TelegramBot from 'node-telegram-bot-api';
-import { checkSubscriptionPrice, formatPriceCheckMessage, getSubscriptionStatuses } from '../price-checker';
-import { addSubscription, getSubscriptionById, getSubscriptions, removeSubscription } from '../subscription';
-import { IUserState } from './types';
-import { ISubscription } from '../subscription/types';
 
+import { LABELS } from '../../config';
+import {
+  generatePriceCheckMessage,
+  generateSubscriptionCreatedMessage,
+  generateSubscriptionStatusesMessage,
+  generateWaitingDateMessage,
+  generateWaitingDestinationMessage,
+  MESSAGE_TEMPLATES,
+  MessagesEnum,
+} from '../../messages';
+import type { PriceChecker } from '../price-checker';
+import type { ISubscription, SubscriptionManager } from '../subscription';
 
-// Хранилище состояний пользователей
-const userStates: Map<number, IUserState> = new Map();
+import { BotUsers } from './BotUsers';
+import type { IUserState } from './types';
+import { UserStageEnum } from './types/UserStageEnum';
 
-/**
- * Инициализирует Telegram бота
- * @param token Токен бота
- * @returns Экземпляр бота
- */
-export function initBot(token: string): TelegramBot {
-  if (!token) {
-    throw new Error('Токен Telegram бота не предоставлен');
+export class Bot {
+  bot: TelegramBot;
+  users: BotUsers;
+  subscriptionsManager: SubscriptionManager;
+  priceChecker: PriceChecker;
+
+  constructor(
+    token: string,
+    subscriptionsManager: SubscriptionManager,
+    priceChecker: PriceChecker,
+  ) {
+    if (!token) {
+      throw new Error('Токен Telegram бота не предоставлен');
+    }
+
+    this.bot = new TelegramBot(token, { polling: true });
+    this.subscriptionsManager = subscriptionsManager;
+    this.priceChecker = priceChecker;
+    this.users = new BotUsers();
+    this.initializeCommands();
   }
 
-  const bot = new TelegramBot(token, { polling: true });
-  
-  // Обработчик команды /start
-  bot.onText(/\/start/, (msg) => {
+  initializeCommands(): void {
+    this.bot.onText(/\/start/, this.onStart.bind(this));
+    this.bot.onText(/\/help/, this.onHelp.bind(this));
+    this.bot.onText(/\/subscribe/, this.onSubscribe.bind(this));
+    this.bot.onText(/\/subscriptions/, this.onSubscriptions.bind(this));
+
+    this.bot.onText(/\/check_(.+)/, this.onCheck.bind(this));
+    this.bot.onText(/\/remove_(.+)/, this.onRemove.bind(this));
+
+    this.bot.on('message', this.onMessage.bind(this));
+
+    this.setupCallbackQueryHandlers();
+  }
+
+  onStart(msg: TelegramBot.Message): void {
     const chatId = msg.chat.id;
-    bot.sendMessage(
-      chatId,
-      `👋 Привет! Я буду отслеживать цены на авиабилеты и сообщать, когда они снизятся.
-      
-Ваш ID чата: ${chatId}
 
-Доступные команды:
-/subscribe - Создать подписку на билеты
-/subscriptions - Посмотреть свои подписки
-/help - Показать справку`
-    );
-  });
+    this.sendMessageTemplate(chatId, MessagesEnum.WELCOME);
+  }
 
-  // Обработчик команды /help
-  bot.onText(/\/help/, (msg) => {
+  onHelp(msg: TelegramBot.Message): void {
     const chatId = msg.chat.id;
-    bot.sendMessage(
-      chatId,
-      `🛠 Доступные команды:
 
-/subscribe - Создать новую подписку на билеты
-/subscriptions - Посмотреть список ваших подписок
-/help - Показать это сообщение
+    this.sendMessageTemplate(chatId, MessagesEnum.HELP);
+  }
 
-Чтобы создать подписку, используйте команду /subscribe и следуйте инструкциям.`
-    );
-  });
-
-  // Обработчик команды /subscribe
-  bot.onText(/\/subscribe/, (msg) => {
+  onSubscribe(msg: TelegramBot.Message): void {
     const chatId = msg.chat.id;
-    
-    // Создаем новое состояние для пользователя
-    userStates.set(chatId, {
-      chatId,
-      stage: 'waiting_origin',
-      subscription: {
-        chatId: chatId,
-        id: Date.now().toString()
-      }
+
+    this.users.add(chatId);
+
+    this.sendMessageTemplate(chatId, MessagesEnum.SUBSCRIBE, {
+      reply_markup: {
+        force_reply: true,
+      },
     });
-    
-    bot.sendMessage(
-      chatId,
-      '✈️ Создание новой подписки на авиабилеты!\n\nУкажите пункт отправления (город):',
-      {
-        reply_markup: {
-          force_reply: true
-        }
-      }
-    );
-  });
+  }
 
-  // Обработчик команды /subscriptions
-  bot.onText(/\/subscriptions/, async (msg) => {
+  onSubscriptions(msg: TelegramBot.Message): void {
     const chatId = msg.chat.id;
-    const subscriptions = await getSubscriptions(chatId);
-    const message = await getSubscriptionStatuses(subscriptions)
-    
-    bot.sendMessage(chatId, message);
-  });
 
-  bot.onText(/\/check_(.+)/, async (msg, match) => {
-    if (!match || !match[1]) return;
-    
+    this.subscriptionsManager
+      .getSubscriptionsByChatId(chatId)
+      .then(generateSubscriptionStatusesMessage)
+      .then((message: string) => this.bot.sendMessage(chatId, message))
+      .catch(console.error);
+  }
+
+  onCheck(msg: TelegramBot.Message, match: RegExpExecArray | null): void {
+    if (!match || !match[1]) {
+      return;
+    }
+
     const chatId = msg.chat.id;
     const subscriptionId = match[1];
-    
+
+    this.checkSubscription(subscriptionId, chatId).catch(console.error);
+  }
+
+  onRemove(msg: TelegramBot.Message, match: RegExpExecArray | null): void {
+    if (!match || !match[1]) {
+      return;
+    }
+
+    const chatId = msg.chat.id;
+    const subscriptionId = match[1];
+
+    this.subscriptionsManager
+      .removeSubscription(chatId, subscriptionId)
+      .then(() => this.sendMessageTemplate(chatId, MessagesEnum.SUBSCRIPTION_DELETED))
+      .catch(console.error);
+  }
+
+  onMessage(msg: TelegramBot.Message): void {
+    if (!msg.text || msg.text.startsWith('/')) {
+      return;
+    }
+
+    const chatId = msg.chat.id;
+    const userState = this.users.getById(chatId);
+
+    if (!userState) {
+      return;
+    }
+
+    this.processUserDialog(userState, msg.text).catch(console.error);
+  }
+
+  /**
+   * Checks the price for a given subscription and sends a message to the user with the result.
+   * @param subscriptionId The ID of the subscription to check
+   * @param chatId The Telegram chat ID to send the result to
+   * @returns A promise that resolves when the check is complete and the message is sent
+   *
+   * If the subscription is not found or the chat ID does not match the subscription's owner,
+   * an appropriate error message is sent to the user. If the price check is successful,
+   * the result is formatted and sent to the user. In case of an error during the process,
+   * a generic error message is sent.
+   */
+  async checkSubscription(subscriptionId: string, chatId: TelegramBot.ChatId): Promise<void> {
     try {
-      const subscription = await getSubscriptionById(subscriptionId);
-      
+      const subscription = await this.subscriptionsManager.getSubscriptionById(subscriptionId);
+
       if (!subscription) {
-        bot.sendMessage(chatId, '❌ Подписка не найдена.');
-        return;
+        return this.sendMessageTemplate(chatId, MessagesEnum.SUBSCRIPTION_NOT_FOUND);
       }
-      
-      // Проверяем, что подписка принадлежит этому пользователю
+
       if (subscription.chatId !== chatId) {
-        bot.sendMessage(chatId, '❌ У вас нет доступа к этой подписке.');
-        return;
+        return this.sendMessageTemplate(chatId, MessagesEnum.ACCESS_DENIED);
       }
-      
-      await bot.sendMessage(chatId, '🔍 Проверяю текущие цены...');
-      
-      // Проверяем цену
-      const result = await checkSubscriptionPrice(subscription);
-      
+
+      await this.bot.sendMessage(chatId, MESSAGE_TEMPLATES[MessagesEnum.IN_PROGRESS]);
+
+      const result = await this.priceChecker.checkSubscriptionPrice(subscription);
+
       if (result.success) {
-        // Используем общую функцию для форматирования сообщения
-        const message = formatPriceCheckMessage(subscription, result);
-        bot.sendMessage(chatId, message);
+        const message = generatePriceCheckMessage(subscription, result);
+
+        await this.bot.sendMessage(chatId, message);
       } else {
-        bot.sendMessage(chatId, `❌ ${result.message || 'Не удалось получить информацию о ценах.'}`);
+        await this.bot.sendMessage(chatId, MESSAGE_TEMPLATES[MessagesEnum.ERROR]);
       }
     } catch (error) {
       console.error('Ошибка при проверке цены:', error);
-      bot.sendMessage(chatId, '❌ Произошла ошибка при проверке цены. Попробуйте позже.');
+
+      await this.bot.sendMessage(chatId, MESSAGE_TEMPLATES[MessagesEnum.ERROR]);
     }
-  });
+  }
 
-  // Обработчик команд удаления подписки
-  bot.onText(/\/remove_(.+)/, async (msg, match) => {
-    if (!match || !match[1]) return;
-    
-    const chatId = msg.chat.id;
-    const subscriptionId = match[1];
-    
-    await removeSubscription(chatId, subscriptionId);
-    bot.sendMessage(chatId, '✅ Подписка успешно удалена!');
-  });
+  /**
+   * Handles the user's dialog for creating a subscription
+   * @param state The current state of the user
+   * @param text The user's input
+   * @returns A promise that resolves when the dialog is complete
+   *
+   * The function processes the user's input and updates the state accordingly.
+   * In case of an error during the dialog, an appropriate error message is sent to the user.
+   * When the dialog is complete, the function calls createSubscription() to create the subscription.
+   */
+  async processUserDialog(state: IUserState, text: string): Promise<void> {
+    const { chatId, stage, subscription } = state;
 
-  // Обработчик всех сообщений для работы с диалогом создания подписки
-  bot.on('message', (msg) => {
-    if (!msg.text || msg.text.startsWith('/')) return;
-    
-    const chatId = msg.chat.id;
-    const userState = userStates.get(chatId);
-    
-    if (!userState) return;
-    
-    processUserDialog(bot, userState, msg.text);
-  });
+    switch (stage) {
+      case UserStageEnum.WAITING_ORIGIN:
+        subscription.origin = text.trim();
+        state.stage = UserStageEnum.WAITING_DESTINATION;
 
-  return bot;
-}
-
-/**
- * Обрабатывает диалог создания подписки
- * @param bot Экземпляр бота
- * @param state Текущее состояние пользователя
- * @param text Текст сообщения
- */
-function processUserDialog(bot: TelegramBot, state: IUserState, text: string): void {
-  const { chatId, stage, subscription } = state;
-  
-  switch (stage) {
-    case 'waiting_origin':
-      // Сохраняем город отправления
-      subscription.origin = text.trim();
-      state.stage = 'waiting_destination';
-      
-      bot.sendMessage(
-        chatId,
-        `🏙 Город отправления: ${subscription.origin}\n\nУкажите пункт назначения (город):`,
-        {
+        await this.bot.sendMessage(chatId, generateWaitingDestinationMessage(subscription.origin), {
           reply_markup: {
-            force_reply: true
-          }
-        }
-      );
-      break;
-      
-    case 'waiting_destination':
-      // Сохраняем город назначения
-      subscription.destination = text.trim();
-      state.stage = 'waiting_date';
-      
-      bot.sendMessage(
-        chatId,
-        `🏙 Город отправления: ${subscription.origin}\n🏝 Город прибытия: ${subscription.destination}\n\nВыберите тип даты:`,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: 'Конкретная дата', callback_data: 'date_single' },
-                { text: 'Диапазон дат', callback_data: 'date_range' }
-              ]
-            ]
-          }
-        }
-      );
-      break;
-      
-    case 'waiting_date':
-      // Сохраняем конкретную дату и завершаем создание подписки
-      subscription.dateType = 'single';
-      subscription.date = text.trim();
-      subscription.maxPrice = 1000000; // Устанавливаем высокое значение по умолчанию
-      
-      // Создаем и сохраняем подписку
-      createSubscription(bot, state);
-      break;
-      
-    case 'waiting_date_range':
-      // Сохраняем диапазон дат и завершаем создание подписки
-      try {
-        const [startDate, endDate] = text.split('-').map(d => d.trim());
-        if (!startDate || !endDate) throw new Error('Неверный формат');
-        
-        subscription.dateType = 'range';
-        subscription.startDate = startDate;
-        subscription.endDate = endDate;
-        subscription.maxPrice = 1000000; // Устанавливаем высокое значение по умолчанию
-        
-        // Создаем и сохраняем подписку
-        createSubscription(bot, state);
-      } catch (e) {
-        bot.sendMessage(
+            force_reply: true,
+          },
+        });
+        break;
+
+      case UserStageEnum.WAITING_DESTINATION:
+        subscription.destination = text.trim();
+        state.stage = UserStageEnum.WAITING_DATE;
+
+        await this.bot.sendMessage(
           chatId,
-          '❌ Неверный формат диапазона дат. Пожалуйста, используйте формат: DD.MM.YYYY - DD.MM.YYYY'
+          generateWaitingDateMessage(subscription.origin as string, subscription.destination),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: LABELS.dateSingle, callback_data: 'date_single' },
+                  { text: LABELS.dateRange, callback_data: 'date_range' },
+                ],
+              ],
+            },
+          },
         );
-      }
-      break;
-  }
-}
+        break;
 
-/**
- * Завершает создание подписки, проверяет цену и уведомляет пользователя
- * @param bot Экземпляр бота
- * @param state Состояние пользователя
- */
-async function createSubscription(bot: TelegramBot, state: IUserState): Promise<void> {
-  const { chatId, subscription } = state;
-  
-  try {
-    // Создаем и сохраняем подписку
-    const newSubscription = await addSubscription(subscription as ISubscription);
-    
-    // Отправляем начальное сообщение о создании подписки
-    let message = '✅ Подписка успешно создана!\n\n';
-    message += `🏙 Откуда: ${subscription.origin}\n`;
-    message += `🏝 Куда: ${subscription.destination}\n`;
-    
-    if (subscription.dateType === 'single') {
-      message += `📅 Дата: ${subscription.date}\n`;
-    } else {
-      message += `📅 Период: ${subscription.startDate} - ${subscription.endDate}\n`;
+      case UserStageEnum.WAITING_DATE:
+        subscription.dateType = 'single';
+        subscription.date = text.trim();
+
+        await this.createSubscription(state);
+        break;
+
+      case UserStageEnum.WAITING_DATE_RANGE:
+        try {
+          const [startDate, endDate] = text.split('-').map((d) => d.trim());
+
+          if (!startDate || !endDate) {
+            throw new Error('Неверный формат');
+          }
+
+          subscription.dateType = 'range';
+          subscription.startDate = startDate;
+          subscription.endDate = endDate;
+
+          await this.createSubscription(state);
+        } catch (e) {
+          this.sendMessageTemplate(chatId, MessagesEnum.WRONG_DATE_FORMAT);
+        }
+        break;
     }
-    
-    message += '\nЗапускаю проверку цен...';
-    
-    // Отправляем первое сообщение
-    await bot.sendMessage(chatId, message);
-    
-    // Проверяем цену
-    const result = await checkSubscriptionPrice(newSubscription);
-    
-    if (result.success) {
-      // Используем общую функцию для форматирования сообщения
-      const resultMessage = formatPriceCheckMessage(newSubscription, result);
-      await bot.sendMessage(chatId, resultMessage);
-    } else {
-      // Если не удалось получить цену
-      await bot.sendMessage(
-        chatId, 
-        `⚠️ ${result.message || 'Не удалось получить информацию о ценах. Проверка будет повторена по расписанию.'}`
+  }
+
+  /**
+   * Finishes subscription creation process, saves subscription to database and sends message about subscription creation
+   * @param state - user state with chatId and subscription
+   */
+
+  async createSubscription(state: IUserState): Promise<void> {
+    const { chatId, subscription } = state;
+
+    try {
+      const newSubscription = await this.subscriptionsManager.addSubscription(
+        subscription as ISubscription,
       );
-    }
-    
-    // Сбрасываем состояние пользователя
-    userStates.delete(chatId);
-  } catch (error) {
-    console.error('Ошибка при создании подписки:', error);
-    await bot.sendMessage(chatId, '❌ Произошла ошибка при создании подписки. Попробуйте еще раз.');
-    userStates.delete(chatId);
-  }
-}
 
-/**
- * Обработчик кнопок
- * @param bot Экземпляр бота
- */
-export function setupCallbackQueryHandlers(bot: TelegramBot): void {
-  bot.on('callback_query', (query) => {
-    if (!query.message || !query.data) return;
-    
-    const chatId = query.message.chat.id;
-    const userState = userStates.get(chatId);
-    
-    if (!userState) return;
-    
-    const messageId = query.message.message_id;
-    
-    if (query.data === 'date_single') {
-      userState.stage = 'waiting_date';
-      bot.editMessageText('Укажите конкретную дату в формате ДД.ММ.ГГГГ:', {
-        chat_id: chatId,
-        message_id: messageId
-      });
-      bot.sendMessage(chatId, 'Введите дату в формате ДД.ММ.ГГГГ:', {
-        reply_markup: { force_reply: true }
-      });
-    } else if (query.data === 'date_range') {
-      userState.stage = 'waiting_date_range';
-      bot.editMessageText('Укажите диапазон дат:', {
-        chat_id: chatId,
-        message_id: messageId
-      });
-      bot.sendMessage(chatId, 'Введите диапазон дат в формате ДД.ММ.ГГГГ - ДД.ММ.ГГГГ:', {
-        reply_markup: { force_reply: true }
-      });
+      await this.bot.sendMessage(chatId, generateSubscriptionCreatedMessage(newSubscription));
+
+      const result = await this.priceChecker.checkSubscriptionPrice(newSubscription);
+
+      if (result.success) {
+        await this.bot.sendMessage(chatId, generatePriceCheckMessage(newSubscription, result));
+      } else {
+        await this.bot.sendMessage(chatId, MESSAGE_TEMPLATES[MessagesEnum.ERROR]);
+      }
+
+      this.users.delete(chatId);
+    } catch (error) {
+      console.error('Error during subscription creation:', error);
+
+      await this.bot.sendMessage(chatId, MESSAGE_TEMPLATES[MessagesEnum.SUBSCRIPTION_ADDING_ERROR]);
+      this.users.delete(chatId);
     }
-  });
+  }
+
+  /**
+   * Handles callback queries from user
+   *
+   * Listens for callback_query event on Telegram bot and processes user's input
+   * accordingly. Depending on the user's current state, it either asks for a date
+   * or a date range and updates the user's state.
+   */
+  setupCallbackQueryHandlers(): void {
+    this.bot.on('callback_query', async (query) => {
+      if (!query.message || !query.data) {
+        return;
+      }
+
+      const chatId = query.message.chat.id;
+      const userState = this.users.getById(chatId);
+
+      if (!userState) {
+        return;
+      }
+
+      const messageId = query.message.message_id;
+
+      if (query.data === 'date_single') {
+        userState.stage = UserStageEnum.WAITING_DATE;
+
+        await this.bot.editMessageText(LABELS.chooseSingleDate, {
+          chat_id: chatId,
+          message_id: messageId,
+        });
+
+        await this.bot.sendMessage(chatId, LABELS.typeDate, {
+          reply_markup: { force_reply: true },
+        });
+      } else if (query.data === 'date_range') {
+        userState.stage = UserStageEnum.WAITING_DATE_RANGE;
+
+        await this.bot.editMessageText(LABELS.chooseDateRange, {
+          chat_id: chatId,
+          message_id: messageId,
+        });
+
+        await this.bot.sendMessage(chatId, LABELS.typeDateRange, {
+          reply_markup: { force_reply: true },
+        });
+      }
+    });
+  }
+
+  /**
+   * Sends a message to a specific chat ID based on a message template.
+   * @param chatId The Telegram chat ID to send the message to
+   * @param template The message template to use from the MESSAGE_TEMPLATES object
+   * @see MESSAGE_TEMPLATES
+   */
+  sendMessageTemplate(
+    chatId: TelegramBot.ChatId,
+    template: MessagesEnum,
+    options?: TelegramBot.SendMessageOptions,
+  ): void {
+    this.sendMessage(chatId, MESSAGE_TEMPLATES[template], options);
+  }
+
+  /**
+   * Sends a message to a specific chat ID.
+   * @param chatId The Telegram chat ID to send the message to
+   * @param message The message to send
+   * @returns A promise with the sent message
+   */
+  sendMessage(
+    chatId: TelegramBot.ChatId,
+    message: string,
+    options?: TelegramBot.SendMessageOptions,
+  ): void {
+    this.bot
+      .sendMessage(chatId, message, options)
+      .then((msg: TelegramBot.Message) => console.log(JSON.stringify(msg)))
+      .catch(console.error);
+  }
 }

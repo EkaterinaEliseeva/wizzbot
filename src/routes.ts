@@ -1,20 +1,27 @@
-import { Request, Response } from 'express';
-import { checkFlightPriceRange } from './modules/price-checker';
+import type { Request, Response } from 'express';
 
-/**
- * Маршрут для тестирования заполнения формы поиска билетов
- */
-export const testRoute = async (req: Request, res: Response) => {
+import { FileSystemManager } from './modules/file-system';
+import { Logger } from './modules/logger';
+import { PriceChecker } from './modules/price-checker';
+import { SubscriptionManager } from './modules/subscription';
+import { WizzApi } from './modules/wizz';
+
+export const testRoute = (_req: Request, res: Response): void => {
   try {
-    const result = await checkFlightPriceRange('Ереван', 'Рим', '2025-06-18', '2025-06-25');
-    
-    console.log(result)
+    const priceChecker = new PriceChecker(
+      new Logger(),
+      new WizzApi(process.env.WIZZ_API_URL as string),
+      new SubscriptionManager(new FileSystemManager()),
+    );
+    priceChecker
+      .checkFlightPriceRange('Ереван', 'Рим', '2025-06-18', '2025-06-25')
+      .then(console.log)
+      .catch(console.error);
   } catch (error) {
-    // Отправляем информацию об ошибке
     res.status(500).json({
       success: false,
-      message: 'Внутренняя ошибка сервера',
-      error: error instanceof Error ? error.message : String(error)
+      message: 'Internal server error',
+      error: error instanceof Error ? error.message : String(error),
     });
   }
-  }
+};

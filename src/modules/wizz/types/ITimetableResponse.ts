@@ -1,6 +1,6 @@
-import { ITimetableFlightInfo } from "./ITimetableFlightInfo";
+import type { ITimetableFlightInfo } from './ITimetableFlightInfo';
 
 export interface ITimetableResponse {
-    outboundFlights: ITimetableFlightInfo[];
-    returnFlights: ITimetableFlightInfo[]
+  outboundFlights: ITimetableFlightInfo[];
+  returnFlights: ITimetableFlightInfo[];
 }

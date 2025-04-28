@@ -1,6 +1,6 @@
 export interface IDatePriceInfo {
-    date: string;
-    price: number;
-    originCode?: string;
-    destinationCode?: string;
-  }
+  date: string;
+  price: number;
+  originCode?: string;
+  destinationCode?: string;
+}

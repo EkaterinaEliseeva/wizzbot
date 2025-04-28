@@ -1,5 +1,5 @@
-import { IWizzairFlight } from "./IWizzairFlight"
+import type { IWizzairFlight } from './IWizzairFlight';
 
 export interface IWizzairSearchResponse {
-    outboundFlights: IWizzairFlight[];
+  outboundFlights: IWizzairFlight[];
 }

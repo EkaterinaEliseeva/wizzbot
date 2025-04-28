@@ -1,7 +1,9 @@
-import { ISubscription } from "../../subscription/types";
+import type { ISubscription } from '../../subscription/types';
+
+import type { UserStageEnum } from './UserStageEnum';
 
 export interface IUserState {
-    chatId: number;
-    stage: 'idle' | 'waiting_origin' | 'waiting_destination' | 'waiting_date' | 'waiting_date_range' | 'confirm';
-    subscription: Partial<ISubscription>;
+  chatId: number;
+  stage: UserStageEnum;
+  subscription: Partial<ISubscription>;
 }
