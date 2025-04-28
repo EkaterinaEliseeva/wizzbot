@@ -7,7 +7,7 @@ import type { Bot } from '../bot';
 import type { Logger } from '../logger';
 import type { ISubscription, SubscriptionManager } from '../subscription';
 import type { WizzApi } from '../wizz';
-import { getAllAirportCodes } from '../wizz/utils';
+import { getAllAirportCodes } from '../wizz/utils/getAllAirportCodes';
 
 import type {
   IDatePriceInfo,
