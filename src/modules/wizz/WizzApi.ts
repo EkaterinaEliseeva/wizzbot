@@ -42,6 +42,10 @@ export class WizzApi {
         ],
       };
 
+      this.logger.log(
+        `Request to URL: ${this.apiUrl}/asset/farechart with data: ${JSON.stringify(requestData)}`,
+      );
+
       const response = await axios.post<IWizzairSearchResponse>(
         `${this.apiUrl}/asset/farechart`,
         requestData,
@@ -90,6 +94,10 @@ export class WizzApi {
     };
 
     try {
+      this.logger.log(
+        `Request to URL: ${this.apiUrl}/search/timetable with data: ${JSON.stringify(requestData)}`,
+      );
+
       const response = await axios.post<ITimetableResponse>(
         `${this.apiUrl}/search/timetable`,
         requestData,
